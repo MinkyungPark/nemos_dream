@@ -69,7 +69,7 @@ def sample_stage2() -> Stage2Output:
     s1 = sample_stage1()
     return Stage2Output(
         **s1.model_dump(),
-        ko_text_pre_marker="친구가 네이버 인턴십 첫 월급 받자마자 갤럭시 새 거 질렀다",
+        ko_text_draft="친구가 네이버 인턴십 첫 월급 받자마자 갤럭시 새 거 질렀다",
         ko_text="친구가 네이버 인턴십 첫 월급 받자마자 갤럭시 새 거 질렀다 ㅋㅋㅋㅋㅋ",
         rewrite_meta=RewriteMeta(
             target_platform="twitter",
@@ -77,6 +77,7 @@ def sample_stage2() -> Stage2Output:
             target_community="campus",
             target_gender_style="neutral",
             persona_id="kp_0042",
+            extra={"tone_hint": "warm", "topic_tag": "career_first_salary"},
         ),
     )
 

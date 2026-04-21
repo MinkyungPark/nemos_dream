@@ -1,6 +1,6 @@
 ---
 name: stage-module
-description: Use this skill when the user is implementing or modifying code inside one of the four stage subpackages — `stage1_decompose_map`, `stage2_rewrite_marker`, `stage3_validate_filter`, or `stage4_report_viz`. Enforces the contract-first convention, the factory pattern for NVIDIA clients, and the stage-local runner entrypoint.
+description: Use this skill when the user is implementing or modifying code inside one of the four stage subpackages — `stage1_decompose_map`, `stage2_translate_rewrite`, `stage3_validate`, or `stage4_report`. Enforces the contract-first convention, the factory pattern for NVIDIA clients, and the stage-local runner entrypoint.
 ---
 
 # Implementing code in a stage subpackage
@@ -18,46 +18,45 @@ Before writing any code, read these in this order:
 ## Rules
 
 1. **Never widen the inter-stage contract ad-hoc.** If you need a new field,
-   load the `update-schema` skill first. Adding `record.custom = ...` to get
-   unstuck will silently break every downstream stage.
+   load the `update-schema` skill first. Stage 2 has an escape hatch
+   (`RewriteMeta.extra: dict`) for ad-hoc targeting signals — prefer that
+   over bolting new top-level fields onto the schema.
 
 2. **Use the factories in `nvidia_clients.py`.** Do not instantiate
    `OpenAI()` / `AsyncOpenAI()` directly. If a factory is missing, add it —
    that's a `shared owner` change, but it's the right place.
 
 3. **Runner pattern.** Every stage has a `runner.py` with a single `run(...)`
-   entrypoint. Scripts in `scripts/` dispatch to these runners. Individual
-   helpers inside the stage are not called from outside the subpackage.
+   entrypoint. Scripts in `scripts/` dispatch to these runners. You're free
+   to split internal modules however you like — the only locked surface is
+   the schema contract and `runner.run(...)`.
 
 4. **Per-row methods return Pydantic models.** Never return bare dicts from
-   stage-internal functions — it defeats the whole contract.
+   stage-internal functions that cross the stage boundary — it defeats the
+   contract.
 
-5. **When you implement a function, remove its `xfail` in the matching
-   `tests/stage{N}/*.py`** in the same commit.
-
-6. **Stay in your stage.** Don't edit another stage's code or configs.
+5. **Stay in your stage.** Don't edit another stage's code or configs.
    Schema changes go through `update-schema`.
 
 ## Imports
 
 - From the shared root: `from nemos_dream.schemas import Stage1Output, ...`
-- From the stage itself (internal): `from .cultural_map import map_refs`
-  (relative import within the subpackage)
+- From within the stage: `from .cultural_map import map_refs`
+  (relative import within the subpackage).
 
 ## Testing locally
 
 ```bash
-uv sync --extra stage1   # (or the stage you own)
-uv run pytest tests/stage1/ -v
+uv sync --extra stage1        # (or the stage you own)
+uv run pytest tests/          # schema round-trip must always pass
 uv run ruff check src/nemos_dream/stage1_decompose_map/
 ```
 
-If stage 3's Curator deps conflict with your environment, fall back to the
-lightweight orchestrator (`runner.run(..., mode='lightweight')`) — it doesn't
-need Curator and is still end-to-end-correct for dev iteration.
+Stage owners add their own tests under `tests/stage{N}/` when they start
+implementing.
 
 ## Error handling
 
 Infrastructure failures (HTTP, schema parse) **raise**. Data-level rejections
-(safety/PII/rules) **set `valid=False` + append a `RejectReason`**. Don't
+(safety / PII / rules) **set `valid=False` + append a `RejectReason`**. Don't
 mix the two — a judge timeout is not a rejection.

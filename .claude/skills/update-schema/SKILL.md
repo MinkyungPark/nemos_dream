@@ -14,6 +14,9 @@ so a wrong edit breaks every teammate at once.
    remove a field that's already in a `Stage{1,2,3}Output`. Add a new
    optional field and deprecate the old one in a follow-up.
 2. Bump `nemos_dream.__schema_version__` in `src/nemos_dream/__init__.py`.
+   Stage 2 already has an open escape hatch (`RewriteMeta.extra: dict`) —
+   use that for ad-hoc metadata rather than bumping the version, unless the
+   signal is clearly going to be load-bearing long-term.
 3. Update `.claude/docs/stage-contracts.md` — add the new field under its
    stage and document the invariant.
 4. Add coverage in `tests/fixtures/sample_rows.py` — every schema field must

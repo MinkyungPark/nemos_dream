@@ -13,12 +13,12 @@ a human-readable index into it.
 **Invariants:**
 * Every `CulturalRef.term` in `decomposed.cultural_refs` must be a verbatim
   substring of `source_text` (case-insensitive).
-* `len(mapped_refs) == len(decomposed.cultural_refs)` (every ref gets a mapping,
-  even if `source='web+llm'` with a low-confidence `notes`).
-* `internet_markers.laughter` ∈ {lol, lmao, rofl, haha, none}; the LLM must
-  pick `none` if uncertain — never infer.
+* `len(mapped_refs) == len(decomposed.cultural_refs)` (every ref gets a
+  mapping, even if low-confidence — use `notes` to flag).
+* `internet_markers.laughter` ∈ {lol, lmao, rofl, haha, none}; pick `none`
+  if uncertain — never infer.
 
-## Stage 2 — `stage2_rewrite_marker`
+## Stage 2 — `stage2_translate_rewrite`
 
 | | Schema | Location |
 |---|---|---|
@@ -28,13 +28,15 @@ a human-readable index into it.
 **Invariants:**
 * All `Stage1Output` fields are preserved verbatim — do **not** re-run
   decomposition or cultural mapping.
-* `ko_text_pre_marker` is the LLM output before marker injection;
-  `ko_text` is the post-marker final text.
-* For every `MappedRef` where `source != 'web+llm' or retrieved == False`,
-  the `ko` string should appear in `ko_text` (soft rule — stage 3 R5 enforces
-  it strictly).
+* `ko_text_draft` is the initial Korean translation of `source_text`;
+  `ko_text` is the final rewrite (cultural / register / marker post-processing).
+* For every `MappedRef` that the stage chooses to apply, the corresponding
+  Korean surface should appear in `ko_text` (stage 3 may enforce strictly).
+* `rewrite_meta.extra` is an open dict for ad-hoc targeting signals — use it
+  instead of inventing new top-level fields. Promote keys that stick to real
+  `RewriteMeta` fields via the `update-schema` skill.
 
-## Stage 3 — `stage3_validate_filter`
+## Stage 3 — `stage3_validate`
 
 | | Schema | Location |
 |---|---|---|
@@ -44,26 +46,26 @@ a human-readable index into it.
 **Invariants:**
 * A record never drops `Stage2Output` fields, regardless of `valid`.
 * `valid == False` requires at least one entry in `reject_reasons`.
-* `quality` fields are optional (`None`) only if that stage failed before
-  measuring them; otherwise populate.
+* `quality` fields are optional (`None`) if that check didn't run;
+  populate whatever you measured.
 
-**Reject semantics:** stages S2..S6 should call `record.reject(stage=..., rule=..., detail=...)`
-rather than raising. Exceptions are reserved for infrastructure failures
-(network, schema parse errors) that belong in logs, not the output artifact.
+**Reject semantics:** append a `RejectReason` and set `valid=False` rather
+than raising. Exceptions are reserved for infrastructure failures (network,
+schema parse errors) that belong in logs, not the output artifact.
 
-## Stage 4 — `stage4_report_viz`
+## Stage 4 — `stage4_report`
 
 | | Schema | Location |
 |---|---|---|
 | Input (accepted) | `Stage3Output` | `data/stage3/accepted.jsonl` |
 | Input (rejected) | `Stage3Output` | `data/stage3/rejected.jsonl` |
 | Output (SFT) | `Stage4Sft` | `data/reports/sft.jsonl` |
-| Output (report) | — | `data/reports/report.html`, `.json` |
+| Output (report) | — | `data/reports/report.{html,json,…}` |
 
 **Invariants:**
-* `Stage4Sft.messages` is always exactly three entries: system / user / assistant.
-  System = `configs/stage4/report.yaml::sft.system_prompt`, user = `source_text`,
-  assistant = `ko_text`.
+* `Stage4Sft.messages` is exactly three entries: system / user / assistant
+  (system prompt from `configs/stage4/report.yaml`, user = `source_text`,
+  assistant = `ko_text`).
 * `Stage4Sft.metadata.source_id == Stage3Output.id`.
 
 ## Evolution rules
@@ -75,3 +77,12 @@ rather than raising. Exceptions are reserved for infrastructure failures
    consumer broke. The `update-schema` skill automates this.
 4. Record the change (what, when, why) in a new section at the bottom of
    this file so future teammates understand the delta.
+
+## Changelog
+
+* **v2 (2026-04-21)** — renamed `Stage2Output.ko_text_pre_marker` →
+  `ko_text_draft` (more neutral: stage 2's first pass is a translation draft,
+  not a marker-specific intermediate). Added `RewriteMeta.extra: dict` to
+  honor "Metadata 추가될 수 있음" without future schema churn. No stage
+  implementations exist yet, so this is a scaffold-phase rename rather than
+  a breaking migration.

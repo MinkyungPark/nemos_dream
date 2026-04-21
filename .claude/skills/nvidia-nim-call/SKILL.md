@@ -1,6 +1,6 @@
 ---
 name: nvidia-nim-call
-description: Use this skill when code needs to call a NVIDIA NIM endpoint — LLM chat, embedding, judge, safety, or reward model. Covers the OpenAI-compatible client pattern, `nvext.guided_json` structured output, async usage for stage 3, temperature conventions, and the corporate-proxy patch.
+description: Use this skill when code needs to call a NVIDIA NIM endpoint — LLM chat, embedding, judge, safety, or reward model. Covers the OpenAI-compatible client pattern, `nvext.guided_json` structured output, async usage for stage 3, and temperature conventions.
 ---
 
 # Calling NVIDIA NIM from nemos_dream code
@@ -21,9 +21,8 @@ from openai import OpenAI
 client = OpenAI(base_url="https://integrate.api.nvidia.com/v1", api_key=...)
 ```
 
-Factories encapsulate base URL, API key loading, proxy patching, and
-`skip_health_check=True` defaults. One place to fix it when NVIDIA changes
-an endpoint.
+Factories encapsulate base URL, API key loading, and sensible defaults
+(retries, timeouts). One place to fix it when NVIDIA changes an endpoint.
 
 ## Models cheat sheet
 
@@ -80,19 +79,6 @@ results = await asyncio.gather(*(score_one(r) for r in rows))
 | Structured extraction | 0.2 |
 | Creative rewrite | 0.9 |
 | Judge / safety / reward | 0.0 |
-
-## Corporate proxy
-
-If the shell has `HTTPS_PROXY` set, call `apply_proxy_patches()` at the top
-of any entrypoint BEFORE constructing a client — otherwise `aiohttp` /
-`httpx` transports used by NAT and Data Designer bypass the proxy.
-
-```python
-from nemos_dream.proxy_patch import apply_proxy_patches
-apply_proxy_patches()
-```
-
-No-op when no proxy is set, so it's safe to call unconditionally.
 
 ## Rate limits & retries
 

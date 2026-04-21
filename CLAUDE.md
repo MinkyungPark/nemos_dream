@@ -8,10 +8,11 @@ Nemotron Hackathon Track C. Four teammates own one stage each.
 Before doing anything else, read these in order:
 
 1. `README.md` — pipeline overview
-2. `.claude/docs/architecture.md` — data flow + owner map
-3. `.claude/docs/stage-contracts.md` — schema at each stage boundary
-4. `src/nemos_dream/schemas.py` — the actual Pydantic contract
-5. The `README.md` inside the stage subpackage you're editing
+2. `.claude/docs/stage-owner-guide.md` — the one-page owner playbook
+3. `.claude/docs/architecture.md` — data flow + owner map
+4. `.claude/docs/stage-contracts.md` — schema at each stage boundary
+5. `src/nemos_dream/schemas.py` — the actual Pydantic contract
+6. The `README.md` inside the stage subpackage you're editing
 
 ## Scaffold-phase ground rules
 
@@ -31,9 +32,9 @@ that couples owners and defeats the per-stage extras split.
 
 ## Testing
 
-`uv run pytest tests/test_schemas.py` must always pass. Stage-specific tests
-are `xfail` until that stage is implemented — when you implement a stage,
-remove the `xfail` marker from its tests.
+`uv run pytest tests/test_schemas.py` must always pass — it round-trips every
+stage's schema through a canned fixture. Stage owners add their own tests
+under `tests/stage{N}/` when they start implementing.
 
 ## Secrets
 

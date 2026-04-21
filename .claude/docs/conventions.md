@@ -13,8 +13,9 @@ Every `.py` file outside `src/nemos_dream/schemas.py` is one of:
 `schemas.py` is the only file with real logic — it IS the contract. Stubbing
 it would block everyone.
 
-**When you implement a stage**, remove the `raise` and the `xfail` marker
-on that stage's tests in the same commit.
+**When you implement a stage**, remove the `raise` and add your own tests
+under `tests/stage{N}/`. Layout within your stage is your call; only the
+schema contract and the `runner.run(...)` entrypoint are fixed.
 
 ## Python style
 
@@ -34,7 +35,7 @@ on that stage's tests in the same commit.
 | Install one stage | `uv sync --extra stage{1,2,3,4}` |
 | Install everything | `uv sync --all-extras` |
 | Run tests | `uv run pytest` |
-| Run one test module | `uv run pytest tests/stage1/` |
+| Run one stage's tests | `uv run pytest tests/stage1/` |
 | Lint | `uv run ruff check src/ tests/` |
 | Typecheck | `uv run mypy src/` |
 
@@ -43,15 +44,10 @@ on that stage's tests in the same commit.
 Prefix commit messages with the stage number when the change is
 stage-local: `stage1: implement dict_lookup`. Use `shared:` for
 `schemas.py`, `nvidia_clients.py`, `io_utils.py`. Use `infra:` for
-`pyproject.toml`, `configs/pipeline.yaml`, `scripts/slurm/*`.
+`pyproject.toml`, `configs/pipeline.yaml`, CI, or scripts.
 
 ## Secrets
 
 `.env` is git-ignored. The full key list is in `.env.example`. Never print
 a full API key in a log line — mask to `nvapi-...{last 4}`.
 
-## Slurm etiquette (if using the cluster)
-
-* Login node is shared — never run long jobs inline; always `sbatch`.
-* Every sbatch wrapper goes to partition `cpu` (API-only workloads).
-* Logs land in `logs/<jobname>-<jobid>.{out,err}`.

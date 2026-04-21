@@ -12,7 +12,7 @@ Layering (each stage emits its predecessor's fields plus its own):
 
     RawInput       : {id, source_text}
     Stage1Output   : RawInput      + {decomposed, mapped_refs}
-    Stage2Output   : Stage1Output  + {ko_text, ko_text_pre_marker, rewrite_meta}
+    Stage2Output   : Stage1Output  + {ko_text_draft, ko_text, rewrite_meta}
     Stage3Output   : Stage2Output  + {quality, valid, reject_reasons}
     Stage4Sft      : {messages, metadata}   # final SFT row — OAI chat shape
 """
@@ -136,19 +136,25 @@ class Stage1Output(BaseModel):
 
 
 class RewriteMeta(BaseModel):
-    """Target-side generation hints that stage 2 commits to per row."""
+    """Target-side generation hints that stage 2 commits to per row.
+
+    ``extra`` is an open slot — stage-2 owners can add ad-hoc targeting
+    signals without bumping the schema. Keys that later prove load-bearing
+    should be promoted to real fields (additive only, per update-schema rules).
+    """
 
     target_platform: Platform
     target_age_group: AgeGroup
     target_community: str = ""
     target_gender_style: GenderStyle = "neutral"
     persona_id: str | None = None
+    extra: dict[str, Any] = Field(default_factory=dict)
 
 
 class Stage2Output(Stage1Output):
-    """Stage 2 adds Korean text (pre- and post-marker) plus rewrite targeting."""
+    """Stage 2 adds a Korean translation draft + final rewrite + targeting."""
 
-    ko_text_pre_marker: str
+    ko_text_draft: str
     ko_text: str
     rewrite_meta: RewriteMeta
 

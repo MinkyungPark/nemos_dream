@@ -1,6 +1,6 @@
 # Stage 2 — `translate_rewrite`
 
-> **Owner:** (assign teammate) · **Reference:** draft plan steps 3 + 4.
+> **Owner:** (Minki Hong) · **Reference:** draft plan steps 3 + 4.
 
 **Goal.** Turn a `Stage1Output` row into a `Stage2Output`:
 

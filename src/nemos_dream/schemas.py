@@ -8,13 +8,23 @@ follow the rules in ``.claude/skills/update-schema/SKILL.md``:
 2. Bump ``nemos_dream.__schema_version__`` when you change this file.
 3. Update ``.claude/docs/stage-contracts.md`` with the migration note.
 
-Layering (each stage emits its predecessor's fields plus its own):
+Pipeline shape (multi-turn dialogue, SODA-based):
 
-    RawInput       : {id, source_text}
-    Stage1Output   : RawInput      + {decomposed, mapped_refs}
-    Stage2Output   : Stage1Output  + {ko_text_draft, ko_text, rewrite_meta}
-    Stage3Output   : Stage2Output  + {quality, valid, reject_reasons}
-    Stage4Sft      : {messages, metadata}   # final SFT row — OAI chat shape
+    RawInput       : {id?, original_index, dialogue, speakers, narrative}
+    Stage1Output   : {id, original_index, source_dialogue, speakers, scene,
+                      dialogue_decomposed, mapped_refs}
+    Stage2Output   : Stage1Output + {korean_dialogue_draft, korean_dialogue,
+                                     speaker_personas, speaker_styles,
+                                     translation_meta}
+    Stage3Output   : Stage2Output + {quality, valid, reject_reasons,
+                                     retry_actions, iter}
+    Stage4Sft      : {messages, metadata}   # OAI chat shape
+
+``RawInput`` is **not** a base class of ``Stage1Output`` — raw data stores
+``dialogue: list[str]`` / ``speakers: list[str]`` as parallel lists, while
+stage 1 upgrades these into structured ``list[Turn]`` + ``list[Speaker]``.
+Stage-2+ layering (``Stage2Output`` ⊂ ``Stage1Output`` ⊂ ``Stage3Output``)
+is preserved so downstream stages never drop upstream fields.
 """
 
 from __future__ import annotations
@@ -70,9 +80,14 @@ Platform = Literal["twitter", "reddit", "instagram", "tiktok", "discord", "sms",
 MapSource = Literal["dict", "retriever", "web+llm"]
 GenderStyle = Literal["masc", "fem", "neutral"]
 
+# Open-set strings (stage 1 owner expands as SODA coverage grows, so we do not
+# lock these into ``Literal``): ``Scene.setting``, ``Scene.relationship_type``,
+# ``Speaker.role_in_scene``, ``Speaker.gender_hint``, and every ``Persona.*``
+# attribute.
+
 
 # ---------------------------------------------------------------------------
-# Stage 1 — sociolinguistic decomposition + cultural ref mapping
+# Primitives shared across stages
 # ---------------------------------------------------------------------------
 
 
@@ -92,21 +107,13 @@ class InternetMarkers(BaseModel):
     sarcasm_marker: bool = False
 
 
-class Decomposed(BaseModel):
-    """Stage-1 sociolinguistic meta extracted from a raw English post."""
-
-    source_text: str
-    speech_act: SpeechAct
-    register: Register
-    emotion: Emotion
-    cultural_refs: list[CulturalRef] = Field(default_factory=list)
-    internet_markers: InternetMarkers
-    estimated_age_group: AgeGroup
-    platform_fit: list[Platform] = Field(default_factory=list)
-
-
 class MappedRef(BaseModel):
-    """One English-→-Korean cultural reference mapping, with provenance."""
+    """One English-→-Korean cultural reference mapping, with provenance.
+
+    ``validation`` is an open list of per-ref validation records that stage 1
+    (or the self-verify agent) attaches. Shape is intentionally loose until
+    the stage-1 owner formalises it.
+    """
 
     term: str
     ko: str
@@ -114,49 +121,142 @@ class MappedRef(BaseModel):
     source: MapSource
     retrieved: bool = False
     notes: str = ""
+    validation: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Stage 0 — raw SODA-style dialogue input
+# ---------------------------------------------------------------------------
 
 
 class RawInput(BaseModel):
-    id: str
-    source_text: str
+    """Raw dialogue row as written to ``data/raw/*.jsonl``.
+
+    Stage 1 assigns a canonical ``id`` (typically ``f"soda-{original_index}"``)
+    and upgrades the parallel ``dialogue`` / ``speakers`` string lists into
+    structured ``list[Turn]`` + ``list[Speaker]``.
+    """
+
+    id: str | None = None
+    original_index: int
+    dialogue: list[str]
+    speakers: list[str]
+    narrative: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Stage 1 — dialogue decomposition + cultural-ref mapping
+# ---------------------------------------------------------------------------
+
+
+class Turn(BaseModel):
+    """One utterance in a dialogue."""
+
+    index: int
+    speaker: str  # matches ``Speaker.name_en`` (or the Korean name in stage 2)
+    text: str
+
+
+class Speaker(BaseModel):
+    """English-side speaker metadata extracted by stage 1."""
+
+    name_en: str
+    role_in_scene: str
+    gender_hint: str = "unknown"
+    age_group_hint: AgeGroup = "unknown"
+    register: Register
+    dominant_emotion: Emotion
+    personality_traits: list[str] = Field(default_factory=list)
+    interests_hints: list[str] = Field(default_factory=list)
+    occupation_hint: str = ""
+    speech_style_notes: str = ""
+
+
+class Scene(BaseModel):
+    """Scene-level context decomposed from the dialogue."""
+
+    narrative_en: str = ""
+    setting: str = "other"  # home|workplace|school|online|other|...
+    relationship_type: str = "other"  # friendship|professional|acquaintance|...
+    topics: list[str] = Field(default_factory=list)
+
+
+class DialogueDecomposed(BaseModel):
+    """Dialogue-level sociolinguistic meta (aggregate across speakers)."""
+
+    overall_register: Register
+    overall_emotion: Emotion
+    speech_acts: list[SpeechAct] = Field(default_factory=list)
+    cultural_refs: list[CulturalRef] = Field(default_factory=list)
 
 
 class Stage1Output(BaseModel):
-    """Shape that stage 1 writes to ``data/stage1/*.jsonl``."""
+    """Shape stage 1 writes to ``data/stage1/*.jsonl``."""
 
     id: str
-    source_text: str
-    decomposed: Decomposed
+    original_index: int
+    source_dialogue: list[Turn]
+    speakers: list[Speaker]
+    scene: Scene
+    dialogue_decomposed: DialogueDecomposed
     mapped_refs: list[MappedRef] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
-# Stage 2 — metadata-conditioned Korean rewriting + marker injection
+# Stage 2 — persona / style-conditioned Korean rewriting
 # ---------------------------------------------------------------------------
 
 
-class RewriteMeta(BaseModel):
-    """Target-side generation hints that stage 2 commits to per row.
+class Persona(BaseModel):
+    """Korean persona attached to a translated speaker.
 
-    ``extra`` is an open slot — stage-2 owners can add ad-hoc targeting
-    signals without bumping the schema. Keys that later prove load-bearing
-    should be promoted to real fields (additive only, per update-schema rules).
+    Core nine attributes come from the team's persona bank (e.g.
+    ``nvidia/Nemotron-Personas-Korea``): gender, age, occupation, education
+    (학력), marital_status (결혼여부), military_status (군대여부),
+    family_type (가족형태), housing (집주거여부), major (전공). ``extra`` is
+    an open slot for ad-hoc persona signals.
+
+    ``speaker_ref`` matches the ``Speaker.name_en`` this persona applies to,
+    so readers can zip personas back to stage-1 speakers unambiguously.
     """
 
-    target_platform: Platform
-    target_age_group: AgeGroup
-    target_community: str = ""
-    target_gender_style: GenderStyle = "neutral"
+    speaker_ref: str
+    gender: str = "unknown"
+    age: str = "unknown"
+    occupation: str = ""
+    education: str = ""
+    marital_status: str = ""
+    military_status: str = ""
+    family_type: str = ""
+    housing: str = ""
+    major: str = ""
     persona_id: str | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
-class Stage2Output(Stage1Output):
-    """Stage 2 adds a Korean translation draft + final rewrite + targeting."""
+class Style(BaseModel):
+    """Per-speaker style overlay applied during rewriting.
 
-    ko_text_draft: str
-    ko_text: str
-    rewrite_meta: RewriteMeta
+    Carries the four style signals: formality (격식체), emotion (감정),
+    markers (마커), and speech_style_notes (말하는 스타일).
+    """
+
+    speaker_ref: str
+    formality: Register
+    emotion: Emotion
+    markers: InternetMarkers = Field(default_factory=InternetMarkers)
+    speech_style_notes: str = ""
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class Stage2Output(Stage1Output):
+    """Stage-1 fields preserved verbatim + Korean rewrite + persona/style."""
+
+    korean_dialogue_draft: list[Turn] = Field(default_factory=list)
+    korean_dialogue: list[Turn]
+    speaker_personas: list[Persona] = Field(default_factory=list)
+    speaker_styles: list[Style] = Field(default_factory=list)
+    translation_meta: dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -165,15 +265,38 @@ class Stage2Output(Stage1Output):
 
 
 class QualityScores(BaseModel):
-    semantic_cosine: float | None = None
+    """Quality signals attached by stage 3.
+
+    All fields are optional — populate what the pipeline measured, leave the
+    rest ``None``. Judge axes are 1-5 integers.
+
+    ``semantic_cosine`` (EN↔KR embedding cosine) is **deprecated** — cultural
+    rewriting is not meaning preservation, so low EN↔KR cosine is often a
+    feature not a bug. ``intra_kr_coherence`` (mean NV-Embed cosine between
+    adjacent KR turns) replaces it as the quantitative flow signal.
+    """
+
+    # Judge rubric (1-5)
     property_preservation: int | None = Field(default=None, ge=1, le=5)
     naturalness: int | None = Field(default=None, ge=1, le=5)
     cultural_appropriateness: int | None = Field(default=None, ge=1, le=5)
     register_consistency: int | None = Field(default=None, ge=1, le=5)
+    persona_style_consistency: int | None = Field(default=None, ge=1, le=5)
+
+    # Quantitative
+    intra_kr_coherence: float | None = None
+    semantic_cosine: float | None = None  # DEPRECATED — retained for back-compat
+
+    # Guardrails
     safety_pass: bool | None = None
     pii_pass: bool | None = None
+
+    # Aggregates
     aggregate: float | None = None
     reward: dict[str, float] | None = None
+
+    # Per-axis judge reasoning — fed to the self-verify agent as remediation context
+    judge_reasoning: dict[str, str] | None = None
 
 
 class RejectReason(BaseModel):
@@ -183,14 +306,38 @@ class RejectReason(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
+RetryActionKind = Literal[
+    "stage1_redecompose",
+    "maps_ref_redo",
+    "stage2_rewrite",
+    "websearch_cultural",
+    "none",
+]
+
+
+class RetryAction(BaseModel):
+    """Stage-3 suggestion for the self-verify (NAT ReAct) agent.
+
+    The agent is free to ignore / combine / override these — they are hints,
+    not commands. ``hints`` carries action-specific payloads (e.g. which axis
+    failed, which cultural term to re-resolve).
+    """
+
+    action: RetryActionKind
+    reason_summary: str = ""
+    hints: dict[str, Any] = Field(default_factory=dict)
+
+
 class Stage3Output(Stage2Output):
-    """Stage 3 attaches quality scores + accept/reject decision."""
+    """Stage 3 attaches quality scores, reject reasons, and retry hints."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     quality: QualityScores = Field(default_factory=QualityScores)
     valid: bool = True
     reject_reasons: list[RejectReason] = Field(default_factory=list)
+    retry_actions: list[RetryAction] = Field(default_factory=list)
+    iter: int = 0  # which self-verify iteration produced this row (0 = first pass)
 
 
 # ---------------------------------------------------------------------------
@@ -209,9 +356,9 @@ class SftQualityScore(BaseModel):
 
 class SftMetadata(BaseModel):
     source_id: str
-    domain: str = "sns"
-    target_platform: Platform
-    target_age_group: AgeGroup
+    domain: str = "dialogue"
+    target_platform: Platform | None = None
+    target_age_group: AgeGroup | None = None
     target_community: str = ""
     target_gender_style: GenderStyle = "neutral"
     quality_score: dict[str, SftQualityScore] = Field(default_factory=dict)

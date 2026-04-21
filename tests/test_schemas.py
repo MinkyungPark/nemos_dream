@@ -25,5 +25,7 @@ def test_stage_layering(stage3_row):
     s1 = Stage1Output.model_validate(stage3_row.model_dump())
     s2 = Stage2Output.model_validate(stage3_row.model_dump())
     assert s1.id == s2.id == stage3_row.id
-    assert s1.decomposed == stage3_row.decomposed
-    assert s2.ko_text == stage3_row.ko_text
+    assert s1.dialogue_decomposed == stage3_row.dialogue_decomposed
+    assert s1.source_dialogue == stage3_row.source_dialogue
+    assert s2.korean_dialogue == stage3_row.korean_dialogue
+    assert s2.speaker_personas == stage3_row.speaker_personas

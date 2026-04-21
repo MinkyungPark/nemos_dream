@@ -4,14 +4,17 @@
 
 **Goal.** Turn a `Stage1Output` row into a `Stage2Output`:
 
-1. **번역** — translate the English source text to Korean.
-2. **Rewrite (post-processing)** — rewrite the Korean draft conditioned on
-   stage-1 metadata (cultural mappings, register, markers, age group, …) and
-   any target metadata the owner wants to add.
+1. **번역** — translate the English dialogue to Korean, turn by turn
+   (→ `korean_dialogue_draft`).
+2. **Rewrite (post-processing)** — rewrite each Korean turn conditioned on
+   stage-1 metadata (`scene`, `dialogue_decomposed`, `mapped_refs`) plus a
+   per-speaker `Persona` (성별/나이/직업/학력/결혼여부/군대여부/가족형태/
+   집주거여부/전공) and `Style` (격식체/감정/마커/말하는스타일) overlay
+   (→ `korean_dialogue`).
 
-"Metadata 추가될 수 있음" — the `RewriteMeta` schema is intentionally open;
-extend it via its `extra: dict[str, Any]` field when you need to carry new
-targeting signals without breaking downstream stages.
+Ad-hoc per-run metadata (target platform, community, sampling pass, …) goes
+in `Stage2Output.translation_meta` (open dict) — no schema bump required
+until a key is clearly load-bearing long-term.
 
 ## Contract
 
@@ -20,21 +23,22 @@ targeting signals without breaking downstream stages.
 | Input | `Stage1Output` | `data/stage1/*.jsonl` |
 | Output | `Stage2Output` | `data/stage2/*.jsonl` |
 
-`Stage2Output` extends `Stage1Output` with `ko_text_draft` (translation
-draft), `ko_text` (final rewrite), and `rewrite_meta`.
+`Stage2Output` extends `Stage1Output` with `korean_dialogue_draft`
+(translation draft), `korean_dialogue` (final rewrite),
+`speaker_personas`, `speaker_styles`, and `translation_meta`.
 
 ## Layout (suggested, not enforced)
 
 | File | What goes here |
 |---|---|
-| `translate.py` | English → Korean draft |
-| `rewrite.py` | Korean draft → final Korean SNS post (cultural / marker / register) |
+| `translate.py` | English dialogue → Korean turn draft |
+| `rewrite.py` | Korean draft + persona + style → final Korean dialogue |
 | `prompts.py` | Prompt constants |
 | `runner.py` | End-to-end: load → translate → rewrite → write |
 
 Owner is free to fold translate + rewrite into a single LLM call, add a
-persona module, or split marker injection out — as long as the schema
-contract holds.
+persona sampler module, or split marker injection out — as long as the
+schema contract holds.
 
 ## Install + run
 

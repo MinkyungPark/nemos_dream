@@ -1,4 +1,4 @@
-# Stage 2 — Korean translation + rewrite config.
+# Stage 2 — Korean translation + persona/style-conditioned rewrite config.
 
 model:
   alias: nemotron_nano
@@ -14,7 +14,8 @@ personas:
   cache_dir: .cache/hf
 
 targets:
-  # Sampling distribution for RewriteMeta when not provided.
-  platforms: [twitter, instagram, reddit, tiktok]
+  # Sampling distribution for translation_meta when the stage chooses a target
+  # bucket rather than letting each speaker drift freely.
+  platforms: [twitter, instagram, reddit, tiktok, thread]
   age_groups: [teen, 20s, 30s]
   gender_styles: [masc, fem, neutral]

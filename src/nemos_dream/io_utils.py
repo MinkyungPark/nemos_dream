@@ -56,13 +56,20 @@ def load_hf_dataset(
     spec: str,
     *,
     limit: int | None = None,
-    text_field: str = "text",
+    dialogue_field: str = "dialogue",
+    speakers_field: str = "speakers",
+    narrative_field: str = "narrative",
     id_field: str | None = None,
 ) -> Iterator[dict[str, Any]]:
-    """Load a HuggingFace dataset and yield ``{"id", "source_text"}`` dicts.
+    """Load a HuggingFace dataset and yield ``RawInput``-shaped dicts.
+
+    Output dicts match ``nemos_dream.schemas.RawInput``::
+
+        {"id", "original_index", "dialogue", "speakers", "narrative"}
 
     ``spec`` is ``"owner/name"`` or ``"owner/name:split"`` (default split:
-    ``"train"``). ``id_field=None`` auto-generates ``f"{name}:{idx}"`` ids.
+    ``"train"``). ``id_field=None`` auto-generates ``f"{name}-{idx}"`` ids.
+    ``original_index`` is the row's position within the chosen split.
 
     Requires the optional ``datasets`` dependency (already in
     ``pyproject.toml``). Import is deferred so the module loads cheaply when
@@ -78,8 +85,15 @@ def load_hf_dataset(
     for idx, row in enumerate(ds):
         if limit is not None and idx >= limit:
             break
-        src = row.get(text_field)
-        if not src:
+        dialogue = row.get(dialogue_field)
+        speakers = row.get(speakers_field)
+        if not dialogue or not speakers:
             continue
-        row_id = str(row[id_field]) if id_field else f"{short_name}:{idx}"
-        yield {"id": row_id, "source_text": src}
+        row_id = str(row[id_field]) if id_field else f"{short_name}-{idx}"
+        yield {
+            "id": row_id,
+            "original_index": idx,
+            "dialogue": list(dialogue),
+            "speakers": list(speakers),
+            "narrative": row.get(narrative_field, "") or "",
+        }

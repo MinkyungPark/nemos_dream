@@ -1,4 +1,4 @@
-# Stage 1a — NeMo Data Designer (primary) + NIM fallback.
+# Stage 1 — NeMo Data Designer (primary) + NIM fallback.
 # Reference: ../nemo_dream_step1/configs/data_designer.yaml
 
 model_configs:
@@ -9,18 +9,29 @@ model_configs:
     api_key_env: NVIDIA_API_KEY
 
 columns:
-  - name: source_text
+  - name: dialogue
+    type: seed
+  - name: speakers
+    type: seed
+  - name: narrative
     type: seed
 
-  - name: decomposed
+  - name: dialogue_decomposed
     type: llm_structured
     model_alias: nemotron_nano
-    output_format: nemos_dream.schemas.Decomposed
+    output_format: nemos_dream.schemas.DialogueDecomposed
     temperature: 0.2
     system_prompt_ref: nemos_dream.stage1_decompose_map.prompts.SYSTEM_PROMPT
     prompt: |
-      Annotate this post:
-      """{{ source_text }}"""
+      Annotate this multi-turn dialogue at the dialogue level (register,
+      emotion, speech acts, cultural references). Speaker-level and
+      scene-level decomposition happen in separate calls.
+
+      Narrative: {{ narrative }}
+      Speakers: {{ speakers }}
+      Dialogue:
+      {% for t in dialogue %}- {{ t }}
+      {% endfor %}
 
 fallback:
   enabled: true

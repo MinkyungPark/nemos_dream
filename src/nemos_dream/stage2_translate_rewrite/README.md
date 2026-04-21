@@ -39,7 +39,7 @@ contract holds.
 ## Install + run
 
 ```bash
-uv sync --extra stage2
+uv sync
 uv run python -m scripts.run_stage --stage 2 \
     --input data/stage1/out.jsonl \
     --output data/stage2/out.jsonl

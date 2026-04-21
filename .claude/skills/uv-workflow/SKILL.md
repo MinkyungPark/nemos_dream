@@ -1,21 +1,19 @@
 ---
 name: uv-workflow
-description: Use this skill when the user is adding, syncing, or managing Python dependencies in the nemos_dream repo — any mention of `uv`, `pyproject.toml`, `uv.lock`, a `pip install` request, or a missing module. Handles per-stage optional-extras, base/dev groups, and lockfile regeneration.
+description: Use this skill when the user is adding, syncing, or managing Python dependencies in the nemos_dream repo — any mention of `uv`, `pyproject.toml`, `uv.lock`, a `pip install` request, or a missing module. Handles the flat dependency list, dev group, and lockfile regeneration.
 ---
 
 # uv workflow for nemos_dream
 
-We use uv as the sole Python env manager. Everything lives in a single
-package with per-stage optional-extras, so each teammate only pays for the
-dependencies they need.
+We use uv as the sole Python env manager. Dependencies are a single flat
+list — base Python libs + NVIDIA Nemotron stack. No per-stage extras.
 
 ## Mental model
 
-- **Base dependencies** (`[project.dependencies]`): shared by every stage —
-  `pydantic`, `openai`, `python-dotenv`, `pyyaml`, `tqdm`, `numpy`, `pandas`.
-- **Per-stage extras** (`[project.optional-dependencies]`): `stage1`,
-  `stage2`, `stage3`, `stage4`. Stage 3 is by far the heaviest (Curator, NeMo
-  ecosystem).
+- **Project dependencies** (`[project.dependencies]`): everything every stage
+  can use. Base libs (`pydantic`, `openai`, `python-dotenv`, `pyyaml`, `tqdm`,
+  `numpy`, `pandas`) + NVIDIA stack (`data-designer`, `nvidia-nat[langchain]`,
+  `nemo-curator`, `langchain-nvidia-ai-endpoints`, `datasets` for HF).
 - **Dev group** (`[dependency-groups.dev]`): `pytest`, `ruff`, `mypy`. Always
   installed via the `default-groups = ["dev"]` setting.
 
@@ -23,44 +21,43 @@ dependencies they need.
 
 | What | Command |
 |---|---|
-| Fresh install for a single stage owner | `uv sync --extra stage1` |
-| Fresh install for the whole pipeline | `uv sync --all-extras` |
-| Sync after pulling (picks up new deps) | `uv sync` (preserves extras you previously selected) |
-| Add a base dep | `uv add requests` |
-| Add a stage-1-only dep | `uv add --optional stage1 some-pkg` |
+| Install everything | `uv sync` |
+| Add a dep | `uv add some-pkg` |
 | Add a dev dep | `uv add --group dev pytest-mock` |
-| Remove | `uv remove package-name` |
+| Remove | `uv remove some-pkg` |
 | Upgrade all | `uv lock --upgrade && uv sync` |
-| Run a Python script | `uv run python scripts/run_stage.py ...` |
+| Run a script | `uv run python scripts/run_stage.py ...` |
 | Run pytest | `uv run pytest` |
 
-## When to put a dep where
+## When to add a dep
 
-| Dep character | Goes to |
-|---|---|
-| Used by ≥ 2 stages (e.g. `openai`) | base `[project.dependencies]` |
-| Used only by one stage and heavy (e.g. `nemo-curator`) | that stage's extras |
-| Used only by tests / linters | `[dependency-groups.dev]` |
+Keep the list tight. Only add if:
 
-If unsure, ask first. Wrong placement is cheap to fix (one edit + `uv sync`),
-but putting a 2 GB Curator dep in base would hurt every teammate's install time.
+1. The package is part of the NVIDIA Nemotron stack (NeMo, Curator, NIM,
+   Retriever, Agent Toolkit, NeMoGuard, …), **or**
+2. It's a genuinely foundational library every stage could use (Pydantic,
+   OpenAI SDK, pandas, …).
+
+Stage-specific single-use libs (plotting, web search, PII regex, …) should
+be evaluated carefully — prefer standard-library or existing deps first. If
+a one-off dep is truly needed, just add it to the flat list; per-stage
+extras were removed on purpose.
 
 ## Lockfile
 
-`uv.lock` is committed. After adding/removing deps the file changes — commit
-it alongside the `pyproject.toml` change. Never `uv sync --no-lock`.
+`uv.lock` is committed. After adding/removing deps, commit the lock change
+alongside the `pyproject.toml` change. Never `uv sync --no-lock`.
 
 ## Python version
 
-Pinned to 3.11 via `.python-version`. The cluster's system Python is 3.9 but
-`uv sync` will provision a 3.11 `.venv/` automatically. Do not downgrade the
-pin — several NVIDIA packages require ≥ 3.10.
+Pinned to 3.11 via `.python-version`. `uv sync` auto-provisions a 3.11
+`.venv/`. Do not downgrade — several NVIDIA packages require ≥ 3.10.
 
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `ModuleNotFoundError` after pulling | `uv sync --all-extras` (or `--extra stageN`) |
+| `ModuleNotFoundError` after pulling | `uv sync` |
 | `uv add` complains about python version | `uv python pin 3.11` |
 | `uv.lock` conflicts in PR | Prefer regenerating: `rm uv.lock && uv lock` |
 | Old `.venv` picked up by the shell | `rm -rf .venv && uv sync` |

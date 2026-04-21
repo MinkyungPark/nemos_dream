@@ -41,7 +41,7 @@ Toolkit, Tavily.
 ## Install + run
 
 ```bash
-uv sync --extra stage1
+uv sync
 uv run python -m scripts.run_stage --stage 1 \
     --input data/raw/sample_input.jsonl \
     --output data/stage1/out.jsonl

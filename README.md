@@ -42,12 +42,8 @@ cp .env.example .env
 # 1. Install uv (if you don't have it)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 2. Install the stages you're working on
-uv sync --extra stage1            # stage 1 owner
-uv sync --extra stage2            # stage 2 owner
-uv sync --extra stage3            # stage 3 owner
-uv sync --extra stage4            # stage 4 owner
-uv sync --all-extras              # run the whole pipeline
+# 2. Install dependencies (single flat set — base + NVIDIA Nemotron stack)
+uv sync
 
 # 3. Run tests — the schema round-trip test must pass on a fresh clone.
 uv run pytest
@@ -76,7 +72,7 @@ Full model IDs, env vars, and endpoints: `.claude/docs/nvidia-stack.md`.
 
 ```
 nemos_dream/
-├── pyproject.toml                   uv-managed, per-stage optional-deps
+├── pyproject.toml                   uv-managed, single flat dep list (base + NVIDIA stack)
 ├── configs/                         pipeline.yaml + stage{1..4}/*.yaml
 ├── data/                            raw/ + stage{1,2,3}/ + reports/
 ├── src/nemos_dream/

@@ -47,7 +47,7 @@ Before writing any code, read these in this order:
 ## Testing locally
 
 ```bash
-uv sync --extra stage1        # (or the stage you own)
+uv sync
 uv run pytest tests/          # schema round-trip must always pass
 uv run ruff check src/nemos_dream/stage1_decompose_map/
 ```

@@ -26,7 +26,7 @@ submodules (metrics, viz, export, …) as you see fit. Configs live under
 ## Install + run
 
 ```bash
-uv sync --extra stage4
+uv sync
 uv run python -m scripts.run_stage --stage 4 \
     --accepted data/stage3/accepted.jsonl \
     --rejected data/stage3/rejected.jsonl \

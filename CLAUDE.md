@@ -17,8 +17,7 @@ Before doing anything else, read these in order:
 ## Scaffold-phase ground rules
 
 As of this scaffold, every `.py` file outside `schemas.py` is a signature
-stub. Do not add implementation into unrelated stages while working on one —
-that couples owners and defeats the per-stage extras split.
+stub. Do not add implementation into unrelated stages while working on one.
 
 ## When you change code
 
@@ -27,8 +26,9 @@ that couples owners and defeats the per-stage extras split.
 - **Implementing a stage:** load the `stage-module` skill. Use the factories
   in `nvidia_clients.py`; don't instantiate `OpenAI()` ad-hoc.
 - **Calling NIM for the first time:** load the `nvidia-nim-call` skill.
-- **Dependency changes:** load the `uv-workflow` skill. Add deps under the
-  right `[project.optional-dependencies]` group, not the base list.
+- **Dependency changes:** load the `uv-workflow` skill. Deps are a single
+  flat list (base + NVIDIA Nemotron stack) — keep it that way unless adding
+  something truly new is necessary.
 
 ## Testing
 

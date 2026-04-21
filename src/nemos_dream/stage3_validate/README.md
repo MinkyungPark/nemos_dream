@@ -32,7 +32,7 @@ Nemotron-70B judge via NIM, NV-Embed for dedup, Nemotron-4-340B-Reward.
 ## Install + run
 
 ```bash
-uv sync --extra stage3
+uv sync
 uv run python -m scripts.run_stage --stage 3 \
     --input data/stage2/out.jsonl \
     --output-dir data/stage3/

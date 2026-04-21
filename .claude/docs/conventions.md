@@ -31,9 +31,7 @@ schema contract and the `runner.run(...)` entrypoint are fixed.
 
 | Task | Command |
 |---|---|
-| Install base + dev deps | `uv sync` |
-| Install one stage | `uv sync --extra stage{1,2,3,4}` |
-| Install everything | `uv sync --all-extras` |
+| Install (single flat dep list) | `uv sync` |
 | Run tests | `uv run pytest` |
 | Run one stage's tests | `uv run pytest tests/stage1/` |
 | Lint | `uv run ruff check src/ tests/` |

@@ -13,7 +13,13 @@ uv.lock.bak
 .env
 .env.local
 
-# data products (keep raw inputs, discard generated)
+# data products (keep raw inputs and committed golden examples, discard the rest)
+.artifacts/
+data/stage1/*.jsonl
+!data/stage1/example_input.jsonl
+!data/stage1/example_output.jsonl
+# retriever index cache (regenerated from cultural_map_seed.json)
+configs/stage1/retriever_index.npz
 
 # misc log output
 logs/

@@ -23,6 +23,7 @@ dependencies = [
     "nemo-curator>=1.1.0",                 # Curator pipeline + dedup (stage 3)
     "langchain-nvidia-ai-endpoints>=0.3",  # LangChain ↔ NVIDIA NIM
     "datasets",                            # HF — `nvidia/Nemotron-Personas-Korea` (stage 2)
+    "tavily-python",                       # web fallback for stage 1 cultural_map (dict→retriever→web+llm)
 ]
 
 [dependency-groups]

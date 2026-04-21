@@ -1,11 +1,13 @@
 # Stage 1 — `decompose_map`
 
-> **Owner:** (assign teammate)
-> **Reference impl:** `../nemo_dream_step1/` — most of this subpackage can be lifted as-is.
+> **Owner:** (assign teammate) · **Reference impl:** `../nemo_dream_step1/` has a working version of most of this stage.
 
-Converts raw English SNS posts into `Stage1Output` rows: sociolinguistic metadata
-(speech act, register, emotion, …) **plus** Korean mappings for every cultural
-reference found in the source text.
+**Goal.** Turn a raw English SNS post into a `Stage1Output`:
+
+1. **사회언어학적 분해** — extract speech act, register, emotion, internet
+   markers, age-group hint, platform fit, and cultural references.
+2. **문화적 요소 추가** — for each English cultural reference, attach the
+   Korean equivalent ("어떤 말이 이 말로 바뀐다").
 
 ## Contract
 
@@ -14,40 +16,32 @@ reference found in the source text.
 | Input | `RawInput` | `data/raw/*.jsonl` |
 | Output | `Stage1Output` | `data/stage1/*.jsonl` |
 
-See `data/stage2/example.jsonl` for a real-world example of this shape
-(naming note: in the reference repo it was called "stage 1+2 combined").
+See `data/stage2/example.jsonl` for a real-world example of the final
+`Stage1Output` shape (the reference repo called this "stage 1+2 combined").
 
-## Pipeline
+## Layout (suggested, not enforced)
 
-```
-RawInput
-  ├─ decompose.py       # NeMo Data Designer (primary) / NIM guided_json (fallback)
-  └─ cultural_map.py    # dict → retriever → web+llm chain
-       └─ tools/
-            ├─ dict_lookup.py        # configs/stage1/cultural_map_seed.json
-            ├─ retriever_search.py   # NeMo Retriever (embedqa)
-            └─ web_search.py         # Tavily + Nemotron reasoning
-```
+| File | What goes here |
+|---|---|
+| `decompose.py` | `RawInput` → `Decomposed` |
+| `cultural_map.py` | `list[CulturalRef]` → `list[MappedRef]` |
+| `prompts.py` | Any prompt constants you need |
+| `runner.py` | End-to-end: load → decompose → map → write |
 
-## NVIDIA stack
+You can split these further, merge them, or pick a different backend (Data
+Designer, direct NIM, NAT/ReAct agent, …) — what matters is the I/O contract
+above.
 
-| Path | Tool | Model |
-|---|---|---|
-| Primary extraction | **NeMo Data Designer** | `nvidia/nemotron-3-nano-30b-a3b` |
-| Fallback extraction | **NIM** + `nvext.guided_json` (XGrammar) | same |
-| Semantic retrieval | **NeMo Retriever** | `nvidia/llama-3.2-nv-embedqa-1b-v2` |
-| Agentic mapping (opt-in, `MAP_REFS_USE_NAT=1`) | **NeMo Agent Toolkit** | Nemotron nano |
-| Web-grounded reasoning | **NIM** + guided_json | Nemotron nano |
+## Useful NVIDIA stack
 
-## Install
+See `.claude/docs/nvidia-stack.md` for the full table. Candidates commonly
+used here: Nemotron (NIM), NeMo Data Designer, NeMo Retriever, NeMo Agent
+Toolkit, Tavily.
+
+## Install + run
 
 ```bash
 uv sync --extra stage1
-```
-
-## Run
-
-```bash
 uv run python -m scripts.run_stage --stage 1 \
     --input data/raw/sample_input.jsonl \
     --output data/stage1/out.jsonl

@@ -9,41 +9,21 @@ authors = [
 readme = "README.md"
 
 dependencies = [
+    # base
     "pydantic>=2.6",
-    "openai>=1.40",
     "python-dotenv",
     "pyyaml",
     "tqdm",
     "numpy",
     "pandas>=2.0",
+    # NVIDIA Nemotron stack (every stage can use any of these)
+    "openai>=1.40",                        # NIM is OpenAI-compatible
+    "data-designer",                       # NeMo Data Designer (stage 1)
+    "nvidia-nat[langchain]",               # NeMo Agent Toolkit (stage 1)
+    "nemo-curator>=1.1.0",                 # Curator pipeline + dedup (stage 3)
+    "langchain-nvidia-ai-endpoints>=0.3",  # LangChain ↔ NVIDIA NIM
+    "datasets",                            # HF — `nvidia/Nemotron-Personas-Korea` (stage 2)
 ]
-
-[project.optional-dependencies]
-stage1 = [
-    "data-designer",
-    "nvidia-nat[langchain]",
-    "tavily-python",
-]
-stage2 = [
-    "datasets",
-]
-stage3 = [
-    "hydra-core>=1.3",
-    "nemo-curator>=1.1.0",
-    "datasketch>=1.6",
-    "presidio-analyzer>=2.2",
-    "langchain-nvidia-ai-endpoints>=0.3",
-    "langchain-core>=0.3",
-    "sentencepiece>=0.2",
-    "ftfy>=6.3",
-]
-stage4 = [
-    "matplotlib",
-    "plotly",
-    "jinja2",
-    "rich",
-]
-all = ["nemos-dream[stage1,stage2,stage3,stage4]"]
 
 [dependency-groups]
 dev = [

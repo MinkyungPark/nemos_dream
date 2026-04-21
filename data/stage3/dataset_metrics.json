@@ -1,0 +1,85 @@
+{
+  "counts": {
+    "accepted": 1,
+    "rejected": 10,
+    "total": 11
+  },
+  "reward_distribution": {
+    "coherence": {
+      "mean": 0.785,
+      "p50": 0.785,
+      "p95": 0.785,
+      "n": 1
+    },
+    "correctness": {
+      "mean": 0.813,
+      "p50": 0.813,
+      "p95": 0.813,
+      "n": 1
+    }
+  },
+  "embedding_diversity": {
+    "mean_pairwise_distance": 0.0,
+    "source": "insufficient"
+  },
+  "distinct_n": {
+    "1": 0.5974,
+    "2": 0.6579,
+    "3": 0.72
+  },
+  "persona_coverage_entropy": {
+    "gender": 1.0,
+    "age": 1.0,
+    "occupation": 1.0,
+    "education": 0.0,
+    "marital_status": 0.0,
+    "military_status": 0.0,
+    "family_type": 0.0,
+    "housing": 0.0,
+    "major": 0.0
+  },
+  "scene_coverage_entropy": {
+    "setting": 0.0,
+    "relationship_type": 0.0,
+    "topics": 1.585
+  },
+  "cultural_ref_diversity": {
+    "total_refs": 2,
+    "distinct_terms": 2,
+    "diversity_ratio": 1.0,
+    "type_entropy": 1.0
+  },
+  "length_stats": {
+    "turns": {
+      "mean": 6.0,
+      "p50": 6.0,
+      "p95": 6.0,
+      "n": 1
+    },
+    "chars": {
+      "mean": 305.0,
+      "p50": 305.0,
+      "p95": 305.0,
+      "n": 1
+    }
+  },
+  "reject_breakdown": {
+    "stage3.phase1:near_dup": 2,
+    "stage3.phase2:ascii_ratio": 1,
+    "stage3.phase2:turn_count_parity": 1,
+    "stage3.phase4:intra_kr_coherence": 6
+  },
+  "retry_stats": {
+    "iter_histogram": {
+      "0": 11
+    },
+    "action_counts": {
+      "none": 3,
+      "stage1_redecompose": 1,
+      "stage2_rewrite": 6
+    },
+    "valid_after_retry_rate": 0.0,
+    "retried_rows": 0
+  },
+  "schema_parse_errors": 0
+}

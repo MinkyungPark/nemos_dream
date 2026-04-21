@@ -5,4 +5,4 @@ Each stage subpackage exposes a ``runner`` module with a ``run(...)`` entrypoint
 """
 
 __version__ = "0.1.0"
-__schema_version__ = 3
+__schema_version__ = 4

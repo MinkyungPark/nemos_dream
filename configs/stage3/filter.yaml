@@ -1,9 +1,9 @@
 # Stage 3 — validate/filter thresholds.
 # Reference: ../nemotron-test/conf/config.yaml
-
-defaults:
-  - judge: mock
-  - _self_
+#
+# Everything below is a starting point — the stage-3 owner is free to
+# reshape, add, or drop keys. Only the runner's (input, output_dir) contract
+# is fixed.
 
 paths:
   candidates: data/stage2/out.jsonl

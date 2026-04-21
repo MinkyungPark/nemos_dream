@@ -1,4 +1,4 @@
-# Stage 2a — Korean rewriting config.
+# Stage 2 — Korean translation + rewrite config.
 
 model:
   alias: nemotron_nano

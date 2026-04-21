@@ -3,7 +3,7 @@
 
 defaults:
   - stage1: decompose
-  - stage2: rewrite
+  - stage2: translate_rewrite
   - stage3: filter
   - stage4: report
   - _self_

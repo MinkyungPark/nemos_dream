@@ -45,8 +45,9 @@ stage 2 가 stage 1 의 필드를 지워서 쓰면 안 됨 (원본 필드 그대
 
 파일: `decompose.py`, `cultural_map.py`, `runner.py`
 
-- `decompose.decompose(rows)` → 영문 source_text 를 사회언어학적으로 분해
-  (`Decomposed`: speech_act, register, emotion, cultural_refs, 등).
+- `decompose.decompose(rows)` → 영문 SODA 다이얼로그를 분해
+  (`list[Turn]` + `list[Speaker]` + `Scene` + `DialogueDecomposed`:
+  speech_acts, overall_register, overall_emotion, cultural_refs, 등).
 - `cultural_map.map_refs(refs)` → 각 영어 cultural_ref 에 한국어 equivalent
   (`MappedRef`) 붙이기 ("어떤 말이 이 말로 바뀐다").
 - `runner.run(input, output)` → 위 둘을 엮어 `Stage1Output` JSONL 작성.
@@ -57,13 +58,16 @@ stage 2 가 stage 1 의 필드를 지워서 쓰면 안 됨 (원본 필드 그대
 
 파일: `translate.py`, `rewrite.py`, `runner.py`
 
-- `translate.translate(row)` → 한국어 번역 초안 (→ `ko_text_draft`).
-- `rewrite.rewrite(row, ko_draft, target)` → stage 1 메타 + `RewriteMeta`
-  조건으로 최종 한국어 SNS 글 (→ `ko_text`).
+- `translate.translate(row)` → 한국어 번역 초안 `list[Turn]`
+  (→ `korean_dialogue_draft`).
+- `rewrite.rewrite(row, ko_draft, personas, styles)` → stage 1 메타 +
+  per-speaker `Persona` (성별/나이/직업/학력/결혼여부/군대여부/가족형태/
+  집주거여부/전공) + `Style` (격식체/감정/마커/말하는스타일) 조건으로
+  최종 한국어 다이얼로그 `list[Turn]` (→ `korean_dialogue`).
 - `runner.run(input, output)` → `Stage2Output` JSONL 작성.
 
-Metadata 가 더 필요하면 `RewriteMeta.extra: dict` 에 자유롭게 넣기
-(스키마 bump 없음).
+Per-run ad-hoc metadata 는 `Stage2Output.translation_meta: dict` 에
+자유롭게 넣기 (스키마 bump 없음).
 
 ### Stage 3 — `stage3_validate`
 
@@ -84,7 +88,8 @@ Metadata 가 더 필요하면 `RewriteMeta.extra: dict` 에 자유롭게 넣기
 
 - `runner.run(accepted, rejected, output_dir)` → 리포트(html/json/…) +
   `sft.jsonl` (OAI-chat shape `Stage4Sft`) 생성, 경로 dict 반환.
-- SFT row 는 `messages = [system, user=source_text, assistant=ko_text]`,
+- SFT row 는 OAI chat shape 로 `korean_dialogue` 를 패키징 (system/user/
+  assistant 분할 규칙은 `configs/stage4/report.yaml` 에서 설정),
   `metadata.source_id == Stage3Output.id`.
 
 참고: `data/reports/example_sft.json` 이 타겟 shape 1개 row.

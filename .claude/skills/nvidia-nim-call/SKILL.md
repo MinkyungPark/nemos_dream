@@ -40,9 +40,9 @@ Factories encapsulate base URL, API key loading, and sensible defaults
 When you need JSON that matches a Pydantic model:
 
 ```python
-from nemos_dream.schemas import Decomposed
+from nemos_dream.schemas import DialogueDecomposed
 
-schema = Decomposed.model_json_schema()
+schema = DialogueDecomposed.model_json_schema()
 resp = client.chat.completions.create(
     model=model,
     messages=[{"role": "user", "content": prompt}],
@@ -52,7 +52,7 @@ resp = client.chat.completions.create(
 raw = resp.choices[0].message.content
 # Enum enforcement is SOFT — always normalize before validating.
 normalized = _normalize_aliases(json.loads(raw))
-decomposed = Decomposed.model_validate(normalized)
+decomposed = DialogueDecomposed.model_validate(normalized)
 ```
 
 Look at `../nemo_dream_step1/src/part1_decompose/nim_guided_json.py::_normalize`

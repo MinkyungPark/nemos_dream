@@ -19,8 +19,8 @@ Before writing any code, read these in this order:
 
 1. **Never widen the inter-stage contract ad-hoc.** If you need a new field,
    load the `update-schema` skill first. Stage 2 has an escape hatch
-   (`RewriteMeta.extra: dict`) for ad-hoc targeting signals — prefer that
-   over bolting new top-level fields onto the schema.
+   (`Stage2Output.translation_meta: dict`) for ad-hoc targeting signals —
+   prefer that over bolting new top-level fields onto the schema.
 
 2. **Use the factories in `nvidia_clients.py`.** Do not instantiate
    `OpenAI()` / `AsyncOpenAI()` directly. If a factory is missing, add it —

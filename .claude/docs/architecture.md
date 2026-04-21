@@ -24,10 +24,10 @@ artifact under `data/stage{N}/`.
   ┌──────────────────────────────┐
   │  Stage 2                     │
   │  stage2_translate_rewrite/   │
-  │   • translate.py             │  EN → KR draft
-  │   • rewrite.py               │  post-processing rewrite
+  │   • translate.py             │  EN dialogue → KR turn draft
+  │   • rewrite.py               │  persona/style-conditioned rewrite
   │                              │  (cultural / register / markers;
-  │                              │   RewriteMeta.extra holds ad-hoc metadata)
+  │                              │   translation_meta holds ad-hoc metadata)
   └──────────────────────────────┘
              │
              ▼
@@ -82,7 +82,8 @@ means:
   re-validate it against earlier schemas (see
   `tests/test_schemas.py::test_stage_layering`).
 * Downstream stages never lose upstream fields — a stage-4 SFT export can
-  still reach all the way back to the original `source_text`.
+  still reach all the way back to the original `source_dialogue`.
 * Adding a new field to stage 2 never breaks stage 3's input validation.
-* `RewriteMeta.extra` (dict) lets stage 2 ship ad-hoc targeting signals
-  without a schema bump; promote repeat keys to real fields once they stick.
+* `Stage2Output.translation_meta` (dict) lets stage 2 ship ad-hoc targeting
+  signals without a schema bump; promote repeat keys to real fields once
+  they stick.

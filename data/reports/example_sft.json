@@ -1,0 +1,35 @@
+{
+  "messages": [
+    {
+      "role": "system",
+      "content": "You rewrite English inputs into natural Korean text that matches Korean social and cultural context."
+    },
+    {
+      "role": "user",
+      "content": "original english text"
+    },
+    {
+      "role": "assistant",
+      "content": "final polished korean text"
+    }
+  ],
+  "metadata": {
+    "source_id": "sns-001",
+    "domain": "sns",
+    "target_platform": "twitter",
+    "target_age_group": "20s",
+    "target_community": "campus",
+    "target_gender_style": "neutral",
+    "quality_score": {
+      "meaning_preservation": {
+        "score": 4
+      },
+      "korean_naturalness": {
+        "score": 5
+      },
+      "cultural_grounding": {
+        "score": 4
+      }
+    }
+  }
+}

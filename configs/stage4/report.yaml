@@ -1,0 +1,19 @@
+# Stage 4 — report + SFT export config.
+
+paths:
+  accepted: data/stage3/accepted.jsonl
+  rejected: data/stage3/rejected.jsonl
+  out_dir: data/reports/
+
+report:
+  title: "nemos_dream — EN→KR Cultural SDG Run"
+  top_reject_n: 10
+  distributions:
+    - decomposed.register
+    - decomposed.speech_act
+    - decomposed.estimated_age_group
+    - rewrite_meta.target_platform
+
+sft:
+  system_prompt: "You rewrite English inputs into natural Korean text that matches Korean social and cultural context."
+  jsonl_path: sft.jsonl

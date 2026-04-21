@@ -1,0 +1,20 @@
+{
+  "_comment": "Deterministic (laughter, intensity) → KR token map. Keys are '<laughter>:<intensity>'.",
+  "lol:1":  "ㅋㅋ",
+  "lol:2":  "ㅋㅋㅋ",
+  "lol:3":  "ㅋㅋㅋㅋ",
+  "lol:4":  "ㅋㅋㅋㅋㅋ",
+  "lol:5":  "ㅋㅋㅋㅋㅋㅋ",
+  "lmao:1": "ㅋㅋㅋ",
+  "lmao:2": "ㅋㅋㅋㅋ",
+  "lmao:3": "ㅋㅋㅋㅋㅋ 진짜",
+  "lmao:4": "ㅋㅋㅋㅋㅋㅋㅋ",
+  "lmao:5": "ㅋㅋㅋㅋㅋㅋㅋㅋ 개웃기네",
+  "rofl:3": "ㅋㅋㅋㅋㅋㅋ 개웃기네",
+  "rofl:4": "ㅋㅋㅋㅋㅋㅋㅋㅋ 진짜 개웃기네",
+  "rofl:5": "ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ 미쳤다",
+  "haha:1": "ㅎㅎ",
+  "haha:2": "ㅎㅎㅎ",
+  "haha:3": "ㅎㅎㅎㅎ",
+  "none:*": ""
+}

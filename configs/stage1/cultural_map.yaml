@@ -1,0 +1,23 @@
+# Stage 1b — cultural-ref mapping chain.
+
+chain:
+  # order matters — first route that produces a confident hit wins
+  - dict
+  - retriever
+  - web_llm
+
+retriever:
+  model: nvidia/llama-3.2-nv-embedqa-1b-v2
+  index_path: configs/stage1/retriever_index.npz
+  threshold: 0.65
+
+web_llm:
+  search_provider: tavily
+  model_alias: nemotron_nano
+  # auto-append new mappings back to cultural_map_seed.json
+  persist: true
+
+agent:
+  # opt-in: env MAP_REFS_USE_NAT=1 switches to NAT ReAct workflow
+  enabled: false
+  workflow: configs/stage1/cultural_agent.yaml

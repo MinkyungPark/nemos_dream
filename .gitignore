@@ -1,0 +1,37 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# uv
+uv.lock.bak
+
+# env
+.env
+.env.local
+
+# data products (keep raw inputs, discard generated)
+data/stage1/*.jsonl
+data/stage2/*.jsonl
+data/stage3/*.jsonl
+data/reports/*.html
+data/reports/*.png
+!data/stage1/example.jsonl
+!data/stage2/example.jsonl
+!data/reports/example_sft.json
+
+# slurm
+logs/
+*.out
+*.err
+
+# editors
+.vscode/
+.idea/
+.DS_Store
+
+# claude harness local settings (machine-specific)
+.claude/settings.local.json

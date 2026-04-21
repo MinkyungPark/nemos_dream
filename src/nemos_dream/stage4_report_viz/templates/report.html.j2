@@ -1,0 +1,10 @@
+{# Jinja2 template for the stage-4 HTML report. Populated during implementation. #}
+{# Variables expected:
+     - run_id: str
+     - generated_at: iso timestamp
+     - totals: {accepted, rejected, pass_rate}
+     - axes: dict[str, float]  # mean quality per axis
+     - top_reasons: list[{stage, rule, count, sample}]
+     - distributions: dict[str, dict[str, int]]
+     - chart_paths: dict[str, str]
+#}

@@ -1,0 +1,21 @@
+# Master pipeline config — Hydra entrypoint for the full pipeline.
+# Stage-specific configs live in configs/stage{1,2,3,4}/ and are merged in.
+
+defaults:
+  - stage1: decompose
+  - stage2: rewrite
+  - stage3: filter
+  - stage4: report
+  - _self_
+
+paths:
+  raw: data/raw/sample_input.jsonl
+  stage1_out: data/stage1/out.jsonl
+  stage2_out: data/stage2/out.jsonl
+  stage3_out_dir: data/stage3/
+  reports: data/reports/
+
+run:
+  limit: null
+  seed: 42
+  resume: false

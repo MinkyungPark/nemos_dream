@@ -1,0 +1,10 @@
+{
+  "_comment": "Seed EN→KR cultural map. Stage 1 self-grows this with web+llm retrievals when persist=true.",
+  "thanksgiving": {"ko": "추석", "type": "holiday", "notes": "가족 모임 맥락"},
+  "venmo": {"ko": "토스", "type": "service", "notes": ""},
+  "prom": {"ko": "졸업식 뒤풀이", "type": "event", "approximate": true, "notes": ""},
+  "starbucks": {"ko": "스타벅스", "type": "brand", "keep": true, "notes": ""},
+  "pumpkin spice latte": {"ko": "고구마 라떼", "type": "food", "notes": "seasonal fall drink trope"},
+  "google": {"ko": "네이버", "type": "brand", "notes": "dominant search brand in KR"},
+  "spring break": {"ko": "개강 전 여행", "type": "event", "notes": ""}
+}

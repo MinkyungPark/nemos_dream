@@ -1,0 +1,20 @@
+# Stage 2a — Korean rewriting config.
+
+model:
+  alias: nemotron_nano
+  provider: nvidia
+  model: nvidia/nemotron-3-nano-30b-a3b
+  base_url: https://integrate.api.nvidia.com/v1
+  api_key_env: NVIDIA_API_KEY
+  temperature: 0.9
+
+personas:
+  dataset: nvidia/Nemotron-Personas-Korea
+  split: train
+  cache_dir: .cache/hf
+
+targets:
+  # Sampling distribution for RewriteMeta when not provided.
+  platforms: [twitter, instagram, reddit, tiktok]
+  age_groups: [teen, 20s, 30s]
+  gender_styles: [masc, fem, neutral]

@@ -1,0 +1,45 @@
+# Stage 3 — validate/filter thresholds.
+# Reference: ../nemotron-test/conf/config.yaml
+
+defaults:
+  - judge: mock
+  - _self_
+
+paths:
+  candidates: data/stage2/out.jsonl
+  out_dir: data/stage3/
+
+thresholds:
+  semantic_cosine_floor: 0.5
+  axis_floor: 2          # any axis < this → reject
+  aggregate: 3.5
+  ascii_ratio_max: 0.20
+  honorific_ratio:
+    intimate_max: 0.10
+    formal_min: 0.80
+  length:
+    min_chars: 5
+    max_chars: 1000
+    ratio_min: 0.4
+    ratio_max: 2.5
+  emoji:
+    formal_max: 0
+    casual_max: 5
+
+dedup:
+  jaccard_threshold: 0.8
+  num_perm: 128
+  semantic_cosine_threshold: 0.92
+
+quality_weights:
+  semantic: 0.15
+  property: 0.25
+  naturalness: 0.25
+  cultural: 0.20
+  register: 0.15
+
+reward:
+  # helpfulness is context-free and biases an EN→KR rewrite task — drop it.
+  weights:
+    correctness: 0.5
+    coherence: 0.5

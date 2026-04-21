@@ -21,15 +21,18 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.manifold import TSNE
 
 PERSONA_ATTRIBUTES = [
-    "gender",
+    "sex",
     "age",
     "occupation",
-    "education",
+    "education_level",
     "marital_status",
     "family_type",
-    "housing",
+    "housing_type",
     "military_status",
 ]
+
+# HuggingFace dataset identifier for the Korea persona target
+_HF_TARGET_DATASET = "nvidia/Nemotron-Personas-Korea"
 
 _STAGE_COLORS = {
     "Input": "#98A2B3",
@@ -70,6 +73,28 @@ def _value_bucket(value: Any) -> str:
     if value is None or (isinstance(value, float) and np.isnan(value)):
         return "unknown"
     return str(value).strip() or "unknown"
+
+
+def _age_bucket(age: Any) -> str:
+    try:
+        a = int(age)
+        decade = (a // 10) * 10
+        return f"{decade}s"
+    except (TypeError, ValueError):
+        s = str(age).strip().lower()
+        # already bucketed (e.g. "20s", "30s")
+        if s.endswith("s") and s[:-1].isdigit():
+            return s
+        return s or "unknown"
+
+
+def _normalize_sex(value: Any) -> str:
+    s = str(value or "").strip().lower()
+    if s in ("male", "man", "m", "남자", "남성"):
+        return "male"
+    if s in ("female", "woman", "f", "여자", "여성"):
+        return "female"
+    return "unknown"
 
 
 def _js_divergence(p: dict[str, int], q: dict[str, int]) -> float:
@@ -115,25 +140,51 @@ def _aggregate_from_speakers(speakers: list[dict[str, Any]]) -> dict[str, str]:
         return known[0] if len(set(known)) == 1 else "mixed"
 
     return {
-        "gender": first_known([str(s.get("gender_hint") or "") for s in speakers]),
-        "age": first_known([str(s.get("age_group_hint") or "") for s in speakers]),
+        "sex": _normalize_sex(first_known([str(s.get("gender_hint") or "") for s in speakers])),
+        "age": _age_bucket(first_known([str(s.get("age_group_hint") or "") for s in speakers])),
         "occupation": first_known([str(s.get("occupation_hint") or "") for s in speakers]),
-        "education": "unknown",
+        "education_level": "unknown",
         "marital_status": "unknown",
         "family_type": "unknown",
-        "housing": "unknown",
+        "housing_type": "unknown",
         "military_status": "unknown",
     }
 
 
 def _aggregate_from_personas(personas: list[dict[str, Any]]) -> dict[str, str]:
+    """Aggregate persona attributes from a list of persona dicts.
+
+    Handles both v3 Persona shape (gender/education/housing keys) and
+    v4 RetrievedPersona shape (sex/age/occupation — no demographic details).
+    """
     def first_known(values: list[str]) -> str:
         known = [v for v in values if v and v not in ("unknown", "")]
         if not known:
             return "unknown"
         return known[0] if len(set(known)) == 1 else "mixed"
 
-    return {attr: first_known([str(p.get(attr) or "") for p in personas]) for attr in PERSONA_ATTRIBUTES}
+    # v4 retrieved_persona rows: extract nested dict if present
+    flat: list[dict[str, Any]] = []
+    for p in personas:
+        rp = p.get("retrieved_persona")
+        flat.append(rp if isinstance(rp, dict) else p)
+
+    # v3 compat: gender→sex, education→education_level, housing→housing_type
+    def get_attr(p: dict[str, Any], attr: str) -> str:
+        v3_map = {"sex": "gender", "education_level": "education", "housing_type": "housing"}
+        val = p.get(attr) or p.get(v3_map.get(attr, ""), "")
+        return str(val).strip()
+
+    result: dict[str, str] = {}
+    for attr in PERSONA_ATTRIBUTES:
+        values = [get_attr(p, attr) for p in flat]
+        v = first_known(values)
+        if attr == "sex":
+            v = _normalize_sex(v)
+        elif attr == "age":
+            v = _age_bucket(v)
+        result[attr] = v
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -227,11 +278,22 @@ def _normalize_stage2(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         mapped_refs = row.get("mapped_refs") or []
         mapped_blob = " ".join(f"{r.get('term','')} {r.get('ko','')} {r.get('type','')}" for r in mapped_refs)
         ko_text = " ".join(t.get("text", "") for t in (row.get("korean_dialogue") or []))
-        personas = row.get("speaker_personas") or []
-        persona_blob = " ".join(
-            " ".join([str(p.get("gender", "")), str(p.get("age", "")), str(p.get("occupation", "")), str(p.get("family_type", ""))])
-            for p in personas
-        )
+
+        # v4: persona[*].retrieved_persona; v3 fallback: speaker_personas
+        v4_personas = row.get("persona") or []
+        v3_personas = row.get("speaker_personas") or []
+        personas = v4_personas if v4_personas else v3_personas
+
+        def _persona_blob(p: dict[str, Any]) -> str:
+            rp = p.get("retrieved_persona") or p
+            return " ".join([
+                str(rp.get("sex", rp.get("gender", ""))),
+                str(rp.get("age", "")),
+                str(rp.get("occupation", "")),
+                str(rp.get("family_type", "")),
+            ])
+
+        persona_blob = " ".join(_persona_blob(p) for p in personas)
         doc = "\n".join([
             _stage1_doc(row),
             f"mapped_refs {mapped_blob}",
@@ -280,14 +342,35 @@ def _normalize_stage3(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _normalize_target(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out = []
     for idx, row in enumerate(rows):
-        doc = " ".join(f"{a} {row.get(a, '')}" for a in PERSONA_ATTRIBUTES)
+        details: dict[str, Any] = {}
+        for a in PERSONA_ATTRIBUTES:
+            v = row.get(a)
+            if a == "age":
+                details[a] = _age_bucket(v)
+            elif a == "sex":
+                details[a] = _normalize_sex(v)
+            else:
+                details[a] = v
+        doc = " ".join(f"{a} {details[a]}" for a in PERSONA_ATTRIBUTES)
         out.append({
             "id": str(idx),
             "stage": "Korea Target",
             "doc": doc,
-            "details": {a: row.get(a) for a in PERSONA_ATTRIBUTES},
+            "details": details,
         })
     return out
+
+
+def _load_hf_target(limit: int = 5000) -> list[dict[str, Any]]:
+    from datasets import load_dataset  # type: ignore[import]
+
+    ds = load_dataset(_HF_TARGET_DATASET, split="train", streaming=True)
+    rows: list[dict[str, Any]] = []
+    for row in ds:
+        rows.append({a: row.get(a) for a in PERSONA_ATTRIBUTES})
+        if len(rows) >= limit:
+            break
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -348,28 +431,29 @@ def _build_html(payload: dict[str, Any], output_path: Path) -> None:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Distribution Shift — nemos_dream</title>
   <style>
-    body {{ margin: 0; font-family: "Noto Sans KR", "Malgun Gothic", sans-serif; color: #172033;
-      background: linear-gradient(180deg, #f7f8fc 0%, #edf2f7 100%); }}
+    body {{ margin: 0; font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;
+      color: #1a1a2e; background: linear-gradient(180deg, #f8f9fa 0%, #f1f5f9 100%); min-height:100vh; }}
     main {{ max-width: 1480px; margin: 0 auto; padding: 16px; }}
     .title-row {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }}
-    h1 {{ margin: 0; font-size: 24px; }}
-    .panel {{ background: rgba(255,255,255,.93); border: 1px solid #d8dee9; border-radius: 18px;
-      padding: 12px; box-shadow: 0 16px 32px rgba(16,24,40,.08); }}
+    h1 {{ margin: 0; font-size: 22px; color: #1a1a2e; }}
+    .panel {{ background: rgba(255,255,255,.95); border: 1px solid #dde3ed; border-radius: 18px;
+      padding: 12px; box-shadow: 0 4px 16px rgba(16,24,40,.07); }}
     .toolbar, .stage-tabs, .attr-tabs {{ display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }}
-    button {{ min-height: 30px; border-radius: 999px; border: 1px solid #d8dee9; background: #fff;
-      padding: 0 10px; font-weight: 700; cursor: pointer; color: #344054; font-size: 12px; }}
+    button {{ min-height: 30px; border-radius: 999px; border: 1px solid #dde3ed; background: #f1f5f9;
+      padding: 0 10px; font-weight: 700; cursor: pointer; color: #475467; font-size: 12px; }}
+    button:hover {{ border-color: #76b900; color: #76b900; }}
     button.active {{ color: #fff; border-color: transparent; }}
-    .attr-tabs button.active {{ background: #172033; }}
-    #pcaBtn.active, #tsneBtn.active {{ background: #172033; }}
-    .summary {{ margin-bottom: 8px; font-size: 12px; color: #667085; line-height: 1.6; }}
-    .summary strong {{ color: #172033; }}
-    canvas {{ width: 100%; display: block; border: 1px solid #d8dee9; border-radius: 14px;
+    .attr-tabs button.active {{ background: #76b900; }}
+    #pcaBtn.active, #tsneBtn.active {{ background: #76b900; }}
+    .summary {{ margin-bottom: 8px; font-size: 12px; color: #64748b; line-height: 1.6; }}
+    .summary strong {{ color: #1a1a2e; }}
+    canvas {{ width: 100%; display: block; border: 1px solid #dde3ed; border-radius: 14px;
       background: linear-gradient(180deg, #fff 0%, #f8fbff 100%); }}
     .legend {{ display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }}
-    .legend-item {{ display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #475467; }}
+    .legend-item {{ display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #64748b; }}
     .legend-swatch {{ width: 10px; height: 10px; border-radius: 999px; display: inline-block; }}
-    .detail {{ margin-top: 8px; min-height: 84px; border: 1px solid #d8dee9; border-radius: 10px;
-      padding: 10px; background: #fbfdff; white-space: pre-wrap; font-size: 12px; }}
+    .detail {{ margin-top: 8px; min-height: 84px; border: 1px solid #dde3ed; border-radius: 10px;
+      padding: 10px; background: #f8fafc; white-space: pre-wrap; font-size: 12px; color: #475467; }}
   </style>
 </head>
 <body>
@@ -403,9 +487,14 @@ const stageColors = {{
 const stageBtnColors = stageColors;
 const palette = ["#155EEF","#0E7090","#12B76A","#C11574","#F79009","#7A5AF8","#B42318","#344054","#026AA2","#4E5BA6"];
 let mode = "pca", mouse = null, hovered = null;
-let selectedStages = new Set(stageOrder);
+const PINNED = new Set(["Input", "Korea Target"]);
+const toggleableStages = stageOrder.filter(n => !PINNED.has(n));
+let selectedStages = new Set();
 let colorBy = personaAttributes[0] || "gender";
 
+function isVisible(name) {{
+  return PINNED.has(name) || selectedStages.has(name);
+}}
 function setMode(m) {{
   mode = m;
   document.getElementById("pcaBtn").classList.toggle("active", m === "pca");
@@ -413,10 +502,13 @@ function setMode(m) {{
   render();
 }}
 function toggleStage(name) {{
+  if (PINNED.has(name)) return;
   if (selectedStages.has(name)) {{
-    if (selectedStages.size === 1) return;
-    selectedStages.delete(name);
-  }} else {{ selectedStages.add(name); }}
+    selectedStages.clear();
+  }} else {{
+    selectedStages.clear();
+    selectedStages.add(name);
+  }}
   renderStageTabs(); renderSummary(); render();
 }}
 function setColorBy(attr) {{
@@ -431,20 +523,24 @@ function renderAttrTabs() {{
   }});
 }}
 function renderStageTabs() {{
-  document.getElementById("stageTabs").innerHTML = stageOrder.map(name =>
-    `<button id="stg_${{name.replace(" ","_")}}" class="${{selectedStages.has(name) ? "active" : ""}}">${{name}}</button>`
-  ).join("");
+  document.getElementById("stageTabs").innerHTML = stageOrder.map(name => {{
+    const pinned = PINNED.has(name);
+    const active = isVisible(name);
+    const label = pinned ? `${{name}} 📌` : name;
+    return `<button id="stg_${{name.replace(" ","_")}}" class="${{active ? "active" : ""}}" ${{pinned ? 'style="opacity:0.7;cursor:default"' : ""}}>${{label}}</button>`;
+  }}).join("");
   stageOrder.forEach(name => {{
     const node = document.getElementById("stg_" + name.replace(" ","_"));
     if (!node) return;
-    node.style.background = selectedStages.has(name) ? stageColors[name] : "#fff";
-    node.style.color = selectedStages.has(name) ? "#fff" : "#344054";
-    node.addEventListener("click", () => toggleStage(name));
+    const active = isVisible(name);
+    node.style.background = active ? stageColors[name] : "#f1f5f9";
+    node.style.color = active ? "#fff" : "#475467";
+    if (!PINNED.has(name)) node.addEventListener("click", () => toggleStage(name));
   }});
 }}
 function renderSummary() {{
   const m = payload.metrics;
-  const parts = stageOrder.filter(n => selectedStages.has(n)).map(n => {{
+  const parts = stageOrder.filter(n => isVisible(n)).map(n => {{
     const s = m[n];
     if (!s) return "";
     return `<strong>${{n}}</strong> ${{s.count}} pts` +
@@ -459,7 +555,7 @@ function valFor(pt, attr) {{
   return (v === null || v === undefined || v === "") ? "unknown" : v;
 }}
 function activePoints() {{
-  return (payload[mode].points || []).filter(pt => selectedStages.has(pt.stage));
+  return (payload[mode].points || []).filter(pt => isVisible(pt.stage));
 }}
 function attrValues(points) {{
   const counts = {{}};
@@ -467,9 +563,12 @@ function attrValues(points) {{
   return Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([l])=>l);
 }}
 function colorMapFor(points) {{
-  const labels = attrValues(points), top = labels.slice(0,9), map = {{}};
+  const UNKNOWN_COLOR = "#98A2B3";
+  const labels = attrValues(points).filter(l => l !== "unknown");
+  const top = labels.slice(0,9), map = {{}};
   top.forEach((l,i) => {{ map[l] = palette[i % palette.length]; }});
-  labels.slice(9).forEach(l => {{ map[l] = "#98A2B3"; }});
+  labels.slice(9).forEach(l => {{ map[l] = UNKNOWN_COLOR; }});
+  map["unknown"] = UNKNOWN_COLOR;
   return map;
 }}
 function renderLegend(points) {{
@@ -478,12 +577,20 @@ function renderLegend(points) {{
   ).join("");
   document.getElementById("legend").innerHTML = items;
 }}
-function project(points) {{
-  const xs = points.map(p=>p.coords[0]), ys = points.map(p=>p.coords[1]);
-  const [minX,maxX,minY,maxY] = [Math.min(...xs),Math.max(...xs),Math.min(...ys),Math.max(...ys)];
+// Compute global axis bounds from ALL points once so axes never shift on toggle
+const _allPoints = (payload.pca.points || []);
+const _allPcaXs = _allPoints.map(p=>p.coords[0]), _allPcaYs = _allPoints.map(p=>p.coords[1]);
+const _allTsnePoints = (payload.tsne.points || []);
+const _allTsneXs = _allTsnePoints.map(p=>p.coords[0]), _allTsneYs = _allTsnePoints.map(p=>p.coords[1]);
+const _globalBounds = {{
+  pca:  {{ minX:Math.min(..._allPcaXs),  maxX:Math.max(..._allPcaXs),  minY:Math.min(..._allPcaYs),  maxY:Math.max(..._allPcaYs)  }},
+  tsne: {{ minX:Math.min(..._allTsneXs), maxX:Math.max(..._allTsneXs), minY:Math.min(..._allTsneYs), maxY:Math.max(..._allTsneYs) }},
+}};
+function project() {{
+  const b = _globalBounds[mode];
   return {{
-    sx: x => 70 + ((x-minX)/Math.max(maxX-minX,1e-6))*(canvas.width-140),
-    sy: y => canvas.height-70-((y-minY)/Math.max(maxY-minY,1e-6))*(canvas.height-140),
+    sx: x => 70 + ((x-b.minX)/Math.max(b.maxX-b.minX,1e-6))*(canvas.width-140),
+    sy: y => canvas.height-70-((y-b.minY)/Math.max(b.maxY-b.minY,1e-6))*(canvas.height-140),
   }};
 }}
 function smoothBlob(pts) {{
@@ -503,7 +610,7 @@ function smoothBlob(pts) {{
 function drawBackdrops(points, T) {{
   const alpha = {{"Input":0.055,"Stage1":0.06,"Stage2":0.06,"Stage3":0.06,"Korea Target":0.045}};
   stageOrder.forEach(name => {{
-    if (!selectedStages.has(name)) return;
+    if (!isVisible(name)) return;
     const pts = points.filter(p=>p.stage===name).map(p=>{{return {{x:T.sx(p.coords[0]),y:T.sy(p.coords[1])}}}});
     const blob = smoothBlob(pts);
     if (blob.length < 3) return;
@@ -524,7 +631,7 @@ function drawBackdrops(points, T) {{
   ctx.globalAlpha = 1;
 }}
 function drawCentroidPath(T) {{
-  const centroids = stageOrder.filter(n=>selectedStages.has(n)).map(n => {{
+  const centroids = stageOrder.filter(n=>isVisible(n)).map(n => {{
     const c = (payload.metrics[n]||{{}}).centroid2d;
     if (!c) return null;
     return {{name:n, x:T.sx(c[mode][0]), y:T.sy(c[mode][1])}};
@@ -537,7 +644,20 @@ function drawCentroidPath(T) {{
   centroids.forEach(c => {{
     if (c.name==="Korea Target") return;
     ctx.beginPath(); ctx.fillStyle=stageColors[c.name]; ctx.arc(c.x,c.y,8,0,Math.PI*2); ctx.fill();
-    ctx.fillStyle="#172033"; ctx.font="bold 11px sans-serif"; ctx.fillText(c.name,c.x+10,c.y-10);
+  }});
+}}
+function drawLabels(T) {{
+  const centroids = stageOrder.filter(n=>isVisible(n)).map(n => {{
+    const c = (payload.metrics[n]||{{}}).centroid2d;
+    if (!c) return null;
+    return {{name:n, x:T.sx(c[mode][0]), y:T.sy(c[mode][1])}};
+  }}).filter(Boolean);
+  centroids.forEach(c => {{
+    ctx.font="bold 12px sans-serif";
+    ctx.lineWidth=3; ctx.strokeStyle="rgba(255,255,255,0.85)";
+    ctx.strokeText(c.name, c.x+10, c.y-10);
+    ctx.fillStyle=stageColors[c.name];
+    ctx.fillText(c.name, c.x+10, c.y-10);
   }});
 }}
 function render() {{
@@ -545,23 +665,30 @@ function render() {{
   ctx.clearRect(0,0,canvas.width,canvas.height);
   renderLegend(points);
   if (!points.length) return;
-  const cm = colorMapFor(points), T = project(points);
+  const cm = colorMapFor(points), T = project();
   hovered = null;
   drawBackdrops(points,T);
   drawCentroidPath(T);
-  points.forEach(pt => {{
+  const sorted = [...points].sort((a,b) => {{
+    const au = String(valFor(a,colorBy)) === "unknown" ? 0 : 1;
+    const bu = String(valFor(b,colorBy)) === "unknown" ? 0 : 1;
+    return au - bu;
+  }});
+  sorted.forEach(pt => {{
     const x=T.sx(pt.coords[0]), y=T.sy(pt.coords[1]);
+    const isBackground = pt.stage==="Korea Target" || pt.stage==="Input";
     ctx.beginPath();
     ctx.fillStyle = cm[String(valFor(pt,colorBy))]||"#98A2B3";
-    ctx.globalAlpha = pt.stage==="Korea Target"?0.22:0.84;
-    ctx.arc(x,y,pt.stage==="Korea Target"?4:6,0,Math.PI*2); ctx.fill();
-    ctx.globalAlpha = pt.stage==="Korea Target"?0.08:0.12;
-    ctx.strokeStyle=stageColors[pt.stage]; ctx.lineWidth=0.8; ctx.stroke();
+    ctx.globalAlpha = isBackground ? 0.45 : 0.84;
+    ctx.arc(x,y,isBackground?5:6,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha = isBackground ? 0.25 : 0.12;
+    ctx.strokeStyle=stageColors[pt.stage]; ctx.lineWidth=isBackground?1.2:0.8; ctx.stroke();
     ctx.globalAlpha=1;
     if (mouse && Math.hypot(mouse.x-x,mouse.y-y)<10) {{
       hovered = `${{pt.stage}}\\n${{colorBy}}: ${{valFor(pt,colorBy)}}\\n\\n${{JSON.stringify(pt.details,null,2)}}`;
     }}
   }});
+  drawLabels(T);
   document.getElementById("detail").textContent = hovered || `Hover a point. Colour = ${{colorBy}}. Darker = pipeline data; lighter = Korea target.`;
 }}
 document.getElementById("pcaBtn").addEventListener("click", ()=>setMode("pca"));
@@ -593,11 +720,13 @@ def build_report(
     output_dir: Path = Path("data/reports"),
     target_limit: int = 5000,
     tsne_limit: int = 2000,
+    use_hf_target: bool = True,
 ) -> Path:
     """Run TF-IDF + PCA/t-SNE on available stage files and write distribution_shift.html.
 
-    At least one stage path must exist. ``target_path`` is optional — without it
-    the centroid metrics are computed without a Korea Target reference.
+    At least one stage path must exist. When ``target_path`` is None and
+    ``use_hf_target`` is True (default), loads the Korea persona target from
+    ``nvidia/Nemotron-Personas-Korea`` on HuggingFace automatically.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -618,6 +747,15 @@ def build_report(
     if target_path and Path(target_path).exists():
         stage_order.append("Korea Target")
         records.extend(_normalize_target(_read_jsonl(Path(target_path), target_limit)))
+    elif use_hf_target:
+        print(f"  loading Korea Target from {_HF_TARGET_DATASET} (limit={target_limit})…")
+        try:
+            target_rows = _load_hf_target(target_limit)
+            stage_order.append("Korea Target")
+            records.extend(_normalize_target(target_rows))
+            print(f"  Korea Target: {len(target_rows)} rows loaded")
+        except Exception as exc:
+            print(f"  Korea Target skipped: {exc}")
 
     if not records:
         raise ValueError("No data found — provide at least one stage path.")

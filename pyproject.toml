@@ -23,6 +23,7 @@ dependencies = [
     "nemo-curator>=1.1.0",                 # Curator pipeline + dedup (stage 3)
     "langchain-nvidia-ai-endpoints>=0.3",  # LangChain ↔ NVIDIA NIM
     "datasets",                            # HF — `nvidia/Nemotron-Personas-Korea` (stage 2)
+    "scikit-learn>=1.8.0",
 ]
 
 [dependency-groups]

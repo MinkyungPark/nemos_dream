@@ -13,9 +13,11 @@ Pipeline shape (multi-turn dialogue, SODA-based):
     RawInput       : {id?, original_index, dialogue, speakers, narrative}
     Stage1Output   : {id, original_index, source_dialogue, speakers, scene,
                       dialogue_decomposed, mapped_refs}
-    Stage2Output   : Stage1Output + {korean_dialogue_draft, korean_dialogue,
-                                     speaker_personas, speaker_styles,
-                                     translation_meta}
+    Stage2Output   : Stage1Output + {final_dialogue, step3_korean_dialogue,
+                                     persona}
+                     (+ deprecated v3 fields: korean_dialogue_draft,
+                      korean_dialogue, speaker_personas, speaker_styles,
+                      translation_meta — kept optional for back-compat)
     Stage3Output   : Stage2Output + {quality, valid, reject_reasons,
                                      retry_actions, iter}
     Stage4Sft      : {messages, metadata}   # OAI chat shape
@@ -32,7 +34,7 @@ from __future__ import annotations
 import warnings
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 warnings.filterwarnings(
     "ignore",
@@ -208,16 +210,11 @@ class Stage1Output(BaseModel):
 
 
 class Persona(BaseModel):
-    """Korean persona attached to a translated speaker.
+    """**DEPRECATED (v3)** — 9-attribute Korean persona shape.
 
-    Core nine attributes come from the team's persona bank (e.g.
-    ``nvidia/Nemotron-Personas-Korea``): gender, age, occupation, education
-    (학력), marital_status (결혼여부), military_status (군대여부),
-    family_type (가족형태), housing (집주거여부), major (전공). ``extra`` is
-    an open slot for ad-hoc persona signals.
-
-    ``speaker_ref`` matches the ``Speaker.name_en`` this persona applies to,
-    so readers can zip personas back to stage-1 speakers unambiguously.
+    Superseded by ``PersonaEntry`` / ``RetrievedPersona`` in v4. Kept for
+    back-compat with rows produced by earlier stage 2 runs. New writers
+    should populate ``Stage2Output.persona`` instead of ``speaker_personas``.
     """
 
     speaker_ref: str
@@ -235,10 +232,11 @@ class Persona(BaseModel):
 
 
 class Style(BaseModel):
-    """Per-speaker style overlay applied during rewriting.
+    """**DEPRECATED (v3)** — per-speaker style overlay.
 
-    Carries the four style signals: formality (격식체), emotion (감정),
-    markers (마커), and speech_style_notes (말하는 스타일).
+    Stage 2 v4 folds style signals into the ``retrieved_persona`` payload
+    and ``Speaker`` metadata; this model is retained only to parse rows
+    emitted by earlier stage 2 runs.
     """
 
     speaker_ref: str
@@ -249,14 +247,119 @@ class Style(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
-class Stage2Output(Stage1Output):
-    """Stage-1 fields preserved verbatim + Korean rewrite + persona/style."""
+class RetrievedPersona(BaseModel):
+    """Rich Korean persona retrieved from the persona bank (v4).
 
+    Fields mirror ``nvidia/Nemotron-Personas-Korea`` columns. ``name`` is
+    the Korean speaker name that replaces the English ``Speaker.name_en``
+    in ``Stage2Output.final_dialogue[*].speaker``.
+    """
+
+    name: str
+    age: int
+    age_bucket: str = ""
+    sex: str = ""
+    normalized_location: str = ""
+    occupation: str = ""
+    persona: str = ""
+    persona_id: str = ""
+    summary_text: str = ""
+    career_goals_and_ambitions: str = ""
+    cultural_background: str = ""
+    hobbies_and_interests: str = ""
+    skills_and_expertise: str = ""
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class PersonaSelectionMeta(BaseModel):
+    """Audit trail for how a persona was chosen from the bank."""
+
+    candidate_age_buckets: list[str] = Field(default_factory=list)
+    candidate_gender: str = ""
+    keyword_hints: list[str] = Field(default_factory=list)
+    match_score: float = 0.0
+    matched_by_keywords: bool = False
+    selected_random_age_group: bool = False
+    selected_random_gender: bool = False
+    extra: dict[str, Any] = Field(default_factory=dict)
+
+
+class PersonaEntry(BaseModel):
+    """One persona assignment for a stage-1 speaker (v4 shape).
+
+    ``speaker_name_en`` and ``speaker_index`` tie the entry back to the
+    stage-1 ``Speaker`` / ``source_dialogue`` position. ``retrieved_persona``
+    is the KR persona applied; ``source_speaker_profile`` snapshots the
+    stage-1 ``Speaker`` record used for selection (same shape as
+    :class:`Speaker`).
+    """
+
+    speaker_index: int
+    speaker_name_en: str
+    retrieved_persona: RetrievedPersona
+    selection_metadata: PersonaSelectionMeta = Field(
+        default_factory=PersonaSelectionMeta
+    )
+    source_speaker_profile: Speaker
+
+
+class Stage2Output(Stage1Output):
+    """Stage-1 fields preserved verbatim + Korean rewrite + persona payload.
+
+    **v4 canonical fields** (populated by the current stage-2 runner):
+
+    - ``final_dialogue``: final persona/style-conditioned KR dialogue.
+    - ``step3_korean_dialogue``: snapshot of the KR dialogue at step 3 of
+      stage 2's internal pipeline (usually equal to ``final_dialogue`` but
+      preserved for regression analysis).
+    - ``persona``: list of :class:`PersonaEntry`, one per stage-1 speaker.
+
+    **v3 deprecated fields** (optional; mirrored by the validator below so
+    either side is readable):
+
+    - ``korean_dialogue_draft`` / ``korean_dialogue`` / ``speaker_personas``
+      / ``speaker_styles`` / ``translation_meta``.
+
+    A model-validator mirrors ``final_dialogue`` ↔ ``korean_dialogue`` after
+    construction so every downstream reader can pick either name and get
+    the same turns.
+    """
+
+    # v4 canonical
+    final_dialogue: list[Turn] = Field(default_factory=list)
+    step3_korean_dialogue: list[Turn] = Field(default_factory=list)
+    persona: list[PersonaEntry] = Field(default_factory=list)
+
+    # v3 deprecated (kept optional for back-compat)
     korean_dialogue_draft: list[Turn] = Field(default_factory=list)
-    korean_dialogue: list[Turn]
+    korean_dialogue: list[Turn] = Field(default_factory=list)
     speaker_personas: list[Persona] = Field(default_factory=list)
     speaker_styles: list[Style] = Field(default_factory=list)
     translation_meta: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _mirror_kr_dialogue(self) -> Stage2Output:
+        """Make ``final_dialogue`` and ``korean_dialogue`` interchangeable.
+
+        Accepts rows that populate only one side and backfills the other
+        with the same turn list. If both are populated (v4 writers may do
+        this explicitly) they are left untouched.
+        """
+        if self.final_dialogue and not self.korean_dialogue:
+            self.korean_dialogue = list(self.final_dialogue)
+        elif self.korean_dialogue and not self.final_dialogue:
+            self.final_dialogue = list(self.korean_dialogue)
+        return self
+
+    def persona_speaker_names_en(self) -> set[str]:
+        """English speaker names covered by the populated persona field.
+
+        Prefers v4 ``persona`` when non-empty, falls back to v3
+        ``speaker_personas``. Used by stage 3 for speaker-ref integrity.
+        """
+        if self.persona:
+            return {p.speaker_name_en for p in self.persona}
+        return {p.speaker_ref for p in self.speaker_personas}
 
 
 # ---------------------------------------------------------------------------

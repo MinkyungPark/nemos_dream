@@ -13,9 +13,12 @@ from nemos_dream.schemas import (
     InternetMarkers,
     MappedRef,
     Persona,
+    PersonaEntry,
+    PersonaSelectionMeta,
     QualityScores,
     RawInput,
     RejectReason,
+    RetrievedPersona,
     RetryAction,
     Scene,
     Speaker,
@@ -118,18 +121,76 @@ def sample_stage1() -> Stage1Output:
 
 def sample_stage2() -> Stage2Output:
     s1 = sample_stage1()
+    # v4 canonical final dialogue — speakers are Korean localised names.
+    final = [
+        Turn(index=0, speaker="김수현", text="야 윤지야, 나 네이버에서 인턴 제안 받았어!"),
+        Turn(index=1, speaker="박윤지", text="뭐?? 첫 도전에? 개쩐다 진짜."),
+        Turn(index=2, speaker="김수현", text="ㅋㅋㅋㅋ 기념으로 갤럭시 새로 질렀다."),
+    ]
+    # v3 deprecated scratch draft — kept populated so the field still has
+    # round-trip coverage. New stage-2 writers may leave this empty.
     draft = [
         Turn(index=0, speaker="Shavon", text="야 Rylea, 구글에서 인턴십 제안받았어!"),
         Turn(index=1, speaker="Rylea", text="야 말도 안 돼 — 첫 시도에? 엄청나네."),
         Turn(index=2, speaker="Shavon", text="응 ㅋㅋㅋ 축하로 아이폰 새로 질렀어."),
     ]
-    final = [
-        Turn(index=0, speaker="Shavon", text="야 수현아, 나 네이버에서 인턴 제안 받았어!"),
-        Turn(index=1, speaker="Rylea", text="뭐?? 첫 도전에? 개쩐다 진짜."),
-        Turn(index=2, speaker="Shavon", text="ㅋㅋㅋㅋ 기념으로 갤럭시 새로 질렀다."),
+    personas = [
+        PersonaEntry(
+            speaker_index=0,
+            speaker_name_en="Shavon",
+            retrieved_persona=RetrievedPersona(
+                name="김수현",
+                age=22,
+                age_bucket="20대",
+                sex="남자",
+                normalized_location="서울-마포구",
+                occupation="컴퓨터공학과 학생",
+                persona="김수현 씨는 마포구에서 자취하는 22세 컴공 학부생으로…",
+                persona_id="kp_0042",
+                summary_text="서울-마포구 20대 남자 컴퓨터공학과 학생 김수현 씨…",
+                career_goals_and_ambitions="네이버 인턴십을 발판 삼아 주니어 엔지니어로 취업",
+                cultural_background="홍대 입구역 근처 원룸촌에서 유튜브와 디스코드 문화에 익숙",
+                hobbies_and_interests="피파온라인, 카페 노마드, 트위터 밈 공유",
+                skills_and_expertise="파이썬, 리액트, 깃허브 협업",
+                extra={"tone_hint": "warm"},
+            ),
+            selection_metadata=PersonaSelectionMeta(
+                candidate_age_buckets=["20s"],
+                candidate_gender="male",
+                keyword_hints=["대학생", "인턴", "기술"],
+                match_score=24.0,
+                matched_by_keywords=True,
+                selected_random_age_group=False,
+                selected_random_gender=False,
+            ),
+            source_speaker_profile=s1.speakers[0],
+        ),
+        PersonaEntry(
+            speaker_index=1,
+            speaker_name_en="Rylea",
+            retrieved_persona=RetrievedPersona(
+                name="박윤지",
+                age=23,
+                age_bucket="20대",
+                sex="여자",
+                normalized_location="서울-성북구",
+                occupation="경영학과 학생",
+                persona="박윤지 씨는 성북구 본가에서 부모님과 사는 23세 경영 학부생…",
+                persona_id="kp_0087",
+                summary_text="서울-성북구 20대 여자 경영학과 학생 박윤지 씨…",
+                hobbies_and_interests="러닝, 카페 투어, 에세이 필사",
+                skills_and_expertise="엑셀, 프레젠테이션, 동아리 기획",
+            ),
+            source_speaker_profile=s1.speakers[1],
+        ),
     ]
     return Stage2Output(
         **s1.model_dump(),
+        # v4 canonical
+        final_dialogue=final,
+        step3_korean_dialogue=final,
+        persona=personas,
+        # v3 deprecated — populated to keep round-trip field coverage
         korean_dialogue_draft=draft,
         korean_dialogue=final,
         speaker_personas=[

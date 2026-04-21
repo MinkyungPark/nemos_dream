@@ -47,21 +47,26 @@ SODA row index; stage 1 assigns a canonical `id` (typically
 **Invariants:**
 * All `Stage1Output` fields are preserved verbatim — do **not** re-run
   decomposition or cultural mapping.
-* `korean_dialogue_draft` is the literal Korean translation pass (one `Turn`
-  per source turn). `korean_dialogue` is the final persona/style-conditioned
-  rewrite. Both preserve turn count and `Turn.index` alignment with
-  `source_dialogue`.
-* `Turn.speaker` in the Korean lists may be the Korean name if the stage
-  chooses to localize names — pick a convention per run and record it in
-  `translation_meta`.
-* `len(speaker_personas) == len(speaker_styles) == len(speakers)` and each
-  `.speaker_ref` matches exactly one `Speaker.name_en` in the row.
+* `final_dialogue` is the final persona/style-conditioned KR rewrite.
+  `step3_korean_dialogue` is the KR dialogue snapshot at step 3 of stage
+  2's internal pipeline (usually equal to `final_dialogue` but preserved
+  for regression analysis). Both preserve turn count and `Turn.index`
+  alignment with `source_dialogue`.
+* `Turn.speaker` in `final_dialogue` / `step3_korean_dialogue` is the
+  **Korean name** (e.g. `"김나영"`) when persona localisation is applied.
+  The mapping back to `Speaker.name_en` lives in `persona[i].speaker_name_en`
+  and `persona[i].retrieved_persona.name`.
+* `len(persona) == len(speakers)` and `{p.speaker_name_en for p in persona}
+  == {s.name_en for s in speakers}`. Each `persona[i].speaker_index` is the
+  index into `speakers` it applies to.
 * For every `MappedRef` the stage chooses to apply, the corresponding
-  Korean surface should appear in some turn of `korean_dialogue` (stage 3
+  Korean surface should appear in some turn of `final_dialogue` (stage 3
   may enforce strictly).
-* `translation_meta` is an open dict for ad-hoc targeting signals (platform,
-  community, gender style, pass tag, …) — use it instead of inventing new
-  top-level fields. Promote keys that stick via the `update-schema` skill.
+* **Deprecated v3 fields** (`korean_dialogue_draft`, `korean_dialogue`,
+  `speaker_personas`, `speaker_styles`, `translation_meta`) remain readable
+  for back-compat. A model validator mirrors `final_dialogue` ↔
+  `korean_dialogue`, so consumers can read either name interchangeably.
+  New writers should populate only the v4 fields.
 
 ## Stage 3 — `stage3_validate`
 
@@ -119,6 +124,29 @@ schema parse errors) that belong in logs, not the output artifact.
    this file so future teammates understand the delta.
 
 ## Changelog
+
+* **v4 (2026-04-21)** — stage-2 owner finalised a richer persona payload
+  and localised KR speaker names. Additive over v3 (old fields stay
+  readable):
+  * `Stage2Output`: added `final_dialogue: list[Turn]`,
+    `step3_korean_dialogue: list[Turn]`, and `persona: list[PersonaEntry]`.
+    The old `korean_dialogue` is now optional (default `[]`) and is
+    auto-mirrored from `final_dialogue` by a `model_validator`, so any
+    existing reader of `row.korean_dialogue` keeps working.
+    `korean_dialogue_draft`, `speaker_personas`, `speaker_styles`, and
+    `translation_meta` are retained as deprecated optional fields.
+  * New models: `PersonaEntry { speaker_index, speaker_name_en,
+    retrieved_persona, selection_metadata, source_speaker_profile }`,
+    `RetrievedPersona` (rich KR persona: name, age, age_bucket, sex,
+    normalized_location, occupation, persona blurb, persona_id,
+    summary_text, career_goals_and_ambitions, cultural_background,
+    hobbies_and_interests, skills_and_expertise, extra),
+    `PersonaSelectionMeta` (audit trail for how the persona was picked).
+  * `Stage2Output.persona_speaker_names_en()` helper returns the set of
+    English speaker names covered by either the v4 or v3 persona field,
+    so consumer code (phase 2 `speaker_ref_integrity`) stays shape-agnostic.
+  * No stage-3 / stage-4 schema changes; stage 3 consumers were updated
+    to read `persona` when populated and fall back to the v3 field.
 
 * **v3 (2026-04-21)** — pipeline pivoted from single-SNS-post to multi-turn
   SODA dialogue. Breaking scaffold-phase rewrite (no stage implementations

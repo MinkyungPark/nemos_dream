@@ -165,15 +165,22 @@ def _to_stage1(row: Stage3Output) -> Stage1Output:
 
 
 def _merge_stage2(stage2_row: Stage2Output, row: Stage3Output) -> Stage3Output:
-    payload = row.model_dump()
-    payload["final_dialogue"] = [t.model_dump() for t in stage2_row.final_dialogue]
-    payload["step3_korean_dialogue"] = [
-        t.model_dump() for t in stage2_row.step3_korean_dialogue
-    ]
-    payload["persona"] = [p.model_dump() for p in stage2_row.persona]
-    payload["translation_meta"] = dict(stage2_row.translation_meta or {})
-    payload["korean_dialogue"] = []  # let the validator re-mirror final_dialogue
-    return Stage3Output.model_validate(payload)
+    """Copy stage-2 outputs onto ``row`` **in place**.
+
+    We mutate the existing row instead of returning a new instance so
+    the runner's master list (which holds the same reference) stays in
+    sync with self-verify's view. The schema-level
+    ``final_dialogue`` ↔ ``korean_dialogue`` mirror only triggers on
+    model construction, so we re-run ``Stage2Output._mirror_kr_dialogue``
+    manually on ``row`` after the field swap.
+    """
+    row.final_dialogue = list(stage2_row.final_dialogue)
+    row.step3_korean_dialogue = list(stage2_row.step3_korean_dialogue)
+    row.persona = list(stage2_row.persona)
+    row.translation_meta = dict(stage2_row.translation_meta or {})
+    row.korean_dialogue = []
+    Stage2Output._mirror_kr_dialogue(row)  # type: ignore[arg-type]
+    return row
 
 
 def _run_stage2_single(row: Stage3Output) -> Stage2Output:

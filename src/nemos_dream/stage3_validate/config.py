@@ -41,7 +41,7 @@ class Stage3Config:
     reward_weights: dict[str, float] = field(
         default_factory=lambda: {"correctness": 0.5, "coherence": 0.5}
     )
-    self_verify_max_iter: int = 2
+    self_verify_max_iter: int = 3
     self_verify_enabled_actions: list[str] = field(
         default_factory=lambda: [
             "stage1_redecompose",

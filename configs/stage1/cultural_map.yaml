@@ -13,7 +13,7 @@ retriever:
 
 web_llm:
   search_provider: tavily
-  model_alias: nemotron_nano
+  model_alias: nemotron_super
   # auto-append new mappings back to cultural_map_seed.json
   persist: true
 

@@ -125,9 +125,9 @@
     "reviewed": false
   },
   "christianity": {
-    "ko": "기독교",
+    "ko": "불교",
     "type": "other",
-    "notes": "Common Korean term for Christianity used in religious contexts.",
+    "notes": "불교는 한국의 주요 종교로, 자비와 용서를 강조하며 기독교와 유사한 역할을 한다.",
     "source": "retrieved",
     "reviewed": false
   },
@@ -138,7 +138,7 @@
   },
   "church": {
     "ko": "교회",
-    "type": "service",
+    "type": "place",
     "notes": "종교 예배가 열리는 공동체 공간",
     "source": "retrieved",
     "reviewed": true
@@ -337,7 +337,7 @@
   },
   "jesus christ": {
     "ko": "예수 그리스도",
-    "type": "pop_culture",
+    "type": "person",
     "notes": "Koreans typically call him 예수 그리스도 in religious contexts.",
     "source": "retrieved",
     "reviewed": true
@@ -720,7 +720,7 @@
   "father": {
     "ko": "신부님",
     "type": "other",
-    "notes": "Korean honorific for a priest addressed as 'Father' in a church context.",
+    "notes": "In Korean Catholic context, priests are respectfully addressed as 신부님, the cultural equivalent of 'Father'.",
     "source": "retrieved",
     "reviewed": false
   },

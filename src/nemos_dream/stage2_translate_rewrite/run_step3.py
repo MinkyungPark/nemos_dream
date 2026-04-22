@@ -81,7 +81,11 @@ DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b"
 DEFAULT_ENDPOINT = "https://integrate.api.nvidia.com/v1"
 DEFAULT_SEED = 7
 DEFAULT_MODEL_TIMEOUT = 180
-DEFAULT_MAX_PARALLEL_REQUESTS = 1
+# Respect STAGE2_MAX_PARALLEL so multi-row pipeline runs can overlap
+# stage-2 super-120B calls. Default 4 is a conservative starting point for
+# NVIDIA NIM's shared integrate.api.nvidia.com tenancy — bump higher
+# (``STAGE2_MAX_PARALLEL=8``) for private deployments with more headroom.
+DEFAULT_MAX_PARALLEL_REQUESTS = int(os.environ.get("STAGE2_MAX_PARALLEL", "4"))
 
 
 class RetryableGenerationError(RuntimeError):

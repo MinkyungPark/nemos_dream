@@ -174,11 +174,14 @@ async def run_self_verify(
     for step in range(1, max(1, max_iter) + 1):
         action = _next_action()
         if action is None:
+            print(f"[phase6] id={row.id} step={step} no further action (seen={sorted(seen)})", flush=True)
             break
         seen.add(action)
+        print(f"[phase6] id={row.id} step={step} action={action}", flush=True)
         logger.info("[phase6] id=%s step=%d action=%s", row.id, step, action)
         await tools[action].ainvoke("")
         obs = await revalidate_tool.ainvoke("")
+        print(f"[phase6] id={row.id} step={step} revalidate -> {obs}", flush=True)
         logger.info("[phase6] id=%s revalidate -> %s", row.id, obs)
         if state_ctx["row"].valid:
             break

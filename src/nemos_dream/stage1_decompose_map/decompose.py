@@ -379,7 +379,7 @@ class _DecomposeClient(NvidiaSyncClient):
     model_env = "NEMOTRON_MODEL"
 
     def call(self, user_prompt: str, *, schema: dict, temperature: float = 0.2) -> str:
-        model = self.model or "nvidia/nemotron-3-nano-30b-a3b"
+        model = self.model or "nvidia/nemotron-3-super-120b-a12b"
         resp = self.openai.chat.completions.create(
             model=model,
             messages=[
@@ -483,8 +483,8 @@ def _decompose_data_designer(rows: list[RawInput]) -> list[DecomposeResult] | No
             api_key=os.environ["NVIDIA_API_KEY"],
         )
         model = ModelConfig(
-            alias="nemotron-nano",
-            model=os.environ.get("NEMOTRON_MODEL", "nvidia/nemotron-3-nano-30b-a3b"),
+            alias="nemotron-super",
+            model=os.environ.get("NEMOTRON_MODEL", "nvidia/nemotron-3-super-120b-a12b"),
             provider="nvidia-nim",
             skip_health_check=True,
             inference_parameters=ChatCompletionInferenceParams(
@@ -516,7 +516,7 @@ def _decompose_data_designer(rows: list[RawInput]) -> list[DecomposeResult] | No
             name="decomposed",
             column_type="llm-structured",
             prompt=_DD_PROMPT,
-            model_alias="nemotron-nano",
+            model_alias="nemotron-super",
             output_format=_FullDecomposition,
         )
 

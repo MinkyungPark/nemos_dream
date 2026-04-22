@@ -2,9 +2,9 @@
 # Reference: ../nemo_dream_step1/configs/data_designer.yaml
 
 model_configs:
-  - alias: nemotron_nano
+  - alias: nemotron_super
     provider: nvidia
-    model: nvidia/nemotron-3-nano-30b-a3b
+    model: nvidia/nemotron-3-super-120b-a12b
     base_url: https://integrate.api.nvidia.com/v1
     api_key_env: NVIDIA_API_KEY
 
@@ -18,7 +18,7 @@ columns:
 
   - name: dialogue_decomposed
     type: llm_structured
-    model_alias: nemotron_nano
+    model_alias: nemotron_super
     output_format: nemos_dream.schemas.DialogueDecomposed
     temperature: 0.2
     system_prompt_ref: nemos_dream.stage1_decompose_map.prompts.SYSTEM_PROMPT

@@ -107,8 +107,10 @@ async def run_async(
     (``phase6_self_verify`` via ``self_verify_runner``) over every row
     with actionable retry actions. Tests set this to ``False``.
     """
-    input_path = Path(input_path)
-    out_dir = Path(output_dir)
+    # Resolve both paths eagerly so later write_text calls don't race
+    # against any cwd-sensitive plumbing inside stage-2 rewrite / Curator.
+    input_path = Path(input_path).resolve()
+    out_dir = Path(output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     cfg = cfg or config.load()
@@ -139,14 +141,23 @@ async def run_async(
     phase2_rules.apply(rows, rules_cfg)
     await phase3_guardrails.apply_async(rows, safety_fn=safety_fn, pii_fn=pii_fn)
     phase4_semantic.apply(rows, embed_fn=embed_fn, coherence_floor=cfg.intra_kr_coherence_floor)
-    await phase5_judge_reward.apply_async(
-        rows,
-        judge_fn=judge_fn,
-        reward_fn=reward_fn,
-        axis_floor=cfg.axis_floor,
-        aggregate_floor=cfg.aggregate_floor,
-        weights=cfg.quality_weights,
-    )
+    # Phase 5 (judge + reward) is the most expensive step — two LLM calls
+    # per row against the NEMO_3_SUPER / NEMO_REWARD endpoints. Skip
+    # rows that phases 2-4 have already invalidated so we don't burn a
+    # judge-pass on rows we're about to throw into ``rejected.jsonl`` or
+    # the retry queue. Invalid rows still get ``retry_hints.apply``
+    # below, which only reads ``reject_reasons`` — no judge scores
+    # needed to derive retry actions.
+    rows_for_phase5 = [r for r in rows if r.valid]
+    if rows_for_phase5:
+        await phase5_judge_reward.apply_async(
+            rows_for_phase5,
+            judge_fn=judge_fn,
+            reward_fn=reward_fn,
+            axis_floor=cfg.axis_floor,
+            aggregate_floor=cfg.aggregate_floor,
+            weights=cfg.quality_weights,
+        )
     retry_hints.apply(rows)
 
     # Snapshot the pre-self-verify retry queue for the audit log. Self-verify

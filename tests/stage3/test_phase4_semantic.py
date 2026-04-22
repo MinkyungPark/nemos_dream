@@ -12,9 +12,13 @@ def _to_stage3(s2):
 
 def test_apply_populates_coherence_score(stage2_row):
     row = _to_stage3(stage2_row)
-    phase4_semantic.apply([row])
+
+    def embed(texts: list[str]) -> list[list[float]]:
+        return [[1.0, 0.0] for _ in texts]
+
+    phase4_semantic.apply([row], embed_fn=embed)
     assert row.quality.intra_kr_coherence is not None
-    assert row.quality.judge_reasoning["intra_kr_coherence_source"] == "char_jaccard_stub"
+    assert row.quality.judge_reasoning["intra_kr_coherence_source"] == "nv_embed"
 
 
 def test_apply_with_embed_fn_uses_nv_embed_source(stage2_row):

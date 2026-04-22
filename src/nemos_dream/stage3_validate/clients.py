@@ -10,9 +10,13 @@ runs exercise the same code paths the hackathon submission is judged on.
 Model defaults (override via env or explicit ctor arg):
 
 - ``SAFETY_MODEL``   — ``nvidia/llama-3.1-nemoguard-8b-content-safety``
-- ``JUDGE_MODEL``    — ``nvidia/nemotron-3-super-120b-a12b``
-- ``REWARD_MODEL``   — ``nvidia/nemotron-4-340b-reward``
+- ``JUDGE_MODEL``    — ``nvidia/nemotron-3-nano-30b-a3b``
+- ``REWARD_MODEL``   — ``nvidia/nemotron-3-nano-30b-a3b``
 - ``EMBED_MODEL``    — ``nvidia/llama-3.2-nv-embedqa-1b-v2``
+
+Judge + reward were originally 120B super; stage 3 only needs 1-5 integer
+scoring so we downshift to 30B nano for ~3× throughput per scoring pass
+while keeping the heavy 120B super reserved for stage 1/2 generation.
 
 The embed client uses ``langchain_nvidia_ai_endpoints.NVIDIAEmbeddings``
 (Curator's reference embedder) instead of raw OpenAI — NIM's embedding
@@ -149,7 +153,7 @@ class JudgeClient(NvidiaAsyncClient):
 
     def __init__(self, *, model: str | None = None, **kwargs: Any) -> None:
         super().__init__(
-            model=model or "nvidia/nemotron-3-super-120b-a12b",
+            model=model or "nvidia/nemotron-3-nano-30b-a3b",
             **kwargs,
         )
 
@@ -237,14 +241,15 @@ _REWARD_SCHEMA = {
 
 
 class RewardClient(NvidiaAsyncClient):
-    """Nemotron-3-Super-120B reward-style scorer.
+    """Nemotron-3-Nano-30B reward-style scorer.
 
-    ``nvidia/nemotron-4-340b-reward`` reached EOL in NIM's managed catalog
-    (the sibling 70B-reward retired 2026-04-15); the active replacement is
-    to run a short judge-style prompt on ``nvidia/nemotron-3-super-120b-a12b``
-    and capture ``correctness`` / ``coherence`` on a 1-5 scale. The output
-    shape (``dict[str, float]``) matches what consumers expected from the
-    old logprob-based reward endpoint.
+    History: ``nvidia/nemotron-4-340b-reward`` (original reward model) and
+    the 70B-reward sibling both reached EOL in NIM's managed catalog. We
+    briefly bounced to ``nemotron-3-super-120b-a12b`` as a judge-style
+    replacement, but the 1-5 integer output shape doesn't benefit from
+    120B — the 30B ``nemotron-3-nano-30b-a3b`` produces indistinguishable
+    correctness/coherence scores at ~3× throughput, so stage 3 runs nano.
+    The public return shape (``dict[str, float]``) stays unchanged.
     """
 
     model_env = "REWARD_MODEL"
@@ -252,7 +257,7 @@ class RewardClient(NvidiaAsyncClient):
 
     def __init__(self, *, model: str | None = None, **kwargs: Any) -> None:
         super().__init__(
-            model=model or "nvidia/nemotron-3-super-120b-a12b",
+            model=model or "nvidia/nemotron-3-nano-30b-a3b",
             **kwargs,
         )
 

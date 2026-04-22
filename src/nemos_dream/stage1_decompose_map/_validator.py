@@ -112,7 +112,7 @@ class _VerifyClient(NvidiaSyncClient):
     model_env = "NEMOTRON_MODEL"
 
     def call(self, prompt: str) -> str:
-        model = self.model or "nvidia/nemotron-3-nano-30b-a3b"
+        model = self.model or "nvidia/nemotron-3-super-120b-a12b"
         resp = self.openai.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],

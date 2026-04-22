@@ -1,13 +1,15 @@
 """Stage 3 entrypoint: ``Stage2Output`` rows → ``Stage3Output`` rows (+ splits).
 
 The runner chains the five scoring phases (schema+dedup → rules →
-guardrails → semantic → judge+reward), derives retry hints, then writes
-the five README-mandated artifacts under ``output_dir``:
+guardrails → semantic → judge+reward), derives retry hints, runs the
+NAT ReAct self-verify loop on rows with actionable retry hints, and
+then writes the README-mandated artifacts under ``output_dir``:
 
-- ``accepted.jsonl`` — rows with ``valid=True``
-- ``rejected.jsonl`` — rows with ``valid=False``
-- ``retry_queue.jsonl`` — rejected rows with actionable ``retry_actions``
-  (self-verify fodder; the NAT agent in phase 6 consumes this file)
+- ``accepted.jsonl`` — rows with ``valid=True`` (includes rows that
+  went through self-verify and came out valid)
+- ``rejected.jsonl`` — rows with ``valid=False`` (post-self-verify)
+- ``retry_queue.jsonl`` — rows that were fed to self-verify
+- ``repaired.jsonl`` — rows after self-verify (``iter >= 1``)
 - ``dataset_metrics.json`` — absolute quality/diversity telemetry
 - ``reject_details.json`` — per-row reject diary for debugging
 - ``parse_errors.json`` — line-level schema-parse failures
@@ -17,7 +19,8 @@ has no offline stubs. The runner builds its clients through
 ``stage3_validate.clients.build_default_clients`` which reads
 ``NVIDIA_API_KEY`` from the environment (or ``.env`` if the caller
 loaded it). Tests supply their own in-memory ``judge_fn`` / ``reward_fn``
-/ ``safety_fn`` / ``embed_fn`` / ``pii_fn`` shims.
+/ ``safety_fn`` / ``embed_fn`` / ``pii_fn`` shims and set
+``run_self_verify=False`` to skip the NAT agent.
 """
 
 from __future__ import annotations
@@ -90,6 +93,7 @@ async def run_async(
     reward_fn: RewardFn | None = None,
     safety_fn: SafetyFn | None = None,
     pii_fn: PiiFn | None = None,
+    run_self_verify: bool = True,
 ) -> dict[str, int]:
     """Async end-to-end stage-3 runner.
 
@@ -97,6 +101,11 @@ async def run_async(
     default NVIDIA-native client from ``clients.build_default_clients``.
     A missing ``NVIDIA_API_KEY`` therefore fails loudly at first use —
     that's intentional: stage 3 is NIM-backed end-to-end.
+
+    When ``run_self_verify=True`` (the default) the runner runs phases
+    1-5 + retry_hints, then drives the NAT ReAct self-verify agent
+    (``phase6_self_verify`` via ``self_verify_runner``) over every row
+    with actionable retry actions. Tests set this to ``False``.
     """
     input_path = Path(input_path)
     out_dir = Path(output_dir)
@@ -126,7 +135,8 @@ async def run_async(
         semantic_threshold=cfg.semantic_cosine_threshold,
     )
 
-    phase2_rules.apply(rows, {"ascii_ratio_max": cfg.ascii_ratio_max})
+    rules_cfg = {"ascii_ratio_max": cfg.ascii_ratio_max}
+    phase2_rules.apply(rows, rules_cfg)
     await phase3_guardrails.apply_async(rows, safety_fn=safety_fn, pii_fn=pii_fn)
     phase4_semantic.apply(rows, embed_fn=embed_fn, coherence_floor=cfg.intra_kr_coherence_floor)
     await phase5_judge_reward.apply_async(
@@ -139,9 +149,41 @@ async def run_async(
     )
     retry_hints.apply(rows)
 
+    # Snapshot the pre-self-verify retry queue for the audit log. Self-verify
+    # mutates its target rows in place, so copy the JSON now — otherwise
+    # retry_queue.jsonl would end up mirroring the post-repair state.
+    pre_retry_rows = _retry_queue(rows)
+    pre_retry_snapshot = [r.model_dump_json() for r in pre_retry_rows]
+
+    repaired_rows: list[Any] = []
+    if run_self_verify and pre_retry_rows:
+        from nemos_dream.stage3_validate.self_verify_runner import (
+            build_stage_callables,
+            run_self_verify_over_queue,
+        )
+
+        stages = build_stage_callables(
+            embed_fn=embed_fn,
+            judge_fn=judge_fn,
+            reward_fn=reward_fn,
+            safety_fn=safety_fn,
+            pii_fn=pii_fn,
+            rules_cfg=rules_cfg,
+            axis_floor=cfg.axis_floor,
+            aggregate_floor=cfg.aggregate_floor,
+            weights=cfg.quality_weights,
+            coherence_floor=cfg.intra_kr_coherence_floor,
+        )
+        await run_self_verify_over_queue(
+            pre_retry_rows,
+            stages=stages,
+            enabled_actions=cfg.self_verify_enabled_actions,
+            max_iter=cfg.self_verify_max_iter,
+        )
+        repaired_rows = [r for r in pre_retry_rows if (r.iter or 0) > 0]
+
     accepted = [r for r in rows if r.valid]
     rejected = [r for r in rows if not r.valid]
-    retry_rows = _retry_queue(rows)
 
     (out_dir / "accepted.jsonl").write_text(
         "\n".join(r.model_dump_json() for r in accepted) + ("\n" if accepted else ""),
@@ -152,7 +194,12 @@ async def run_async(
         encoding="utf-8",
     )
     (out_dir / "retry_queue.jsonl").write_text(
-        "\n".join(r.model_dump_json() for r in retry_rows) + ("\n" if retry_rows else ""),
+        "\n".join(pre_retry_snapshot) + ("\n" if pre_retry_snapshot else ""),
+        encoding="utf-8",
+    )
+    (out_dir / "repaired.jsonl").write_text(
+        "\n".join(r.model_dump_json() for r in repaired_rows)
+        + ("\n" if repaired_rows else ""),
         encoding="utf-8",
     )
 
@@ -175,7 +222,9 @@ async def run_async(
     return {
         "accepted": len(accepted),
         "rejected": len(rejected),
-        "retry_queue": len(retry_rows),
+        "retry_queue": len(pre_retry_rows),
+        "repaired": len(repaired_rows),
+        "repaired_valid": sum(1 for r in repaired_rows if r.valid),
         "parse_errors": len(parse_errors),
     }
 

@@ -17,8 +17,11 @@ from __future__ import annotations
 
 import argparse
 
+from dotenv import load_dotenv
+
 
 def main() -> int:
+    load_dotenv()
     parser = argparse.ArgumentParser()
     parser.add_argument("--stage", type=int, required=True, choices=[1, 2, 3, 4])
     parser.add_argument("--input")

@@ -45,7 +45,10 @@ def test_turn_count_triggers_stage1_redecompose(stage2_row):
     assert any(a.action == "stage1_redecompose" for a in actions)
 
 
-def test_mapped_ref_missing_triggers_websearch_cultural(stage2_row):
+def test_mapped_ref_surface_triggers_stage2_rewrite(stage2_row):
+    # mapped_refs themselves look fine; the KR text just doesn't surface
+    # them — the fix belongs in the stage-2 rewrite pass, not cultural
+    # re-mapping.
     row = _to_stage3(stage2_row)
     row.valid = False
     row.reject_reasons.append(
@@ -53,8 +56,7 @@ def test_mapped_ref_missing_triggers_websearch_cultural(stage2_row):
     )
     actions = retry_hints.derive(row)
     kinds = {a.action for a in actions}
-    assert "websearch_cultural" in kinds
-    assert "maps_ref_redo" in kinds
+    assert "stage2_rewrite" in kinds
 
 
 def test_low_naturalness_triggers_stage2_rewrite(stage2_row):

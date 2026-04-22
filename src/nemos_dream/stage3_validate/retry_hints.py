@@ -16,6 +16,9 @@ Mapping (first match wins, one action per hint group):
 - ``stage3.phase2:turn_count_parity`` or low ``register_consistency`` /
   low ``persona_style_consistency`` / low ``naturalness`` /
   low ``property_preservation`` → ``stage2_rewrite``.
+- ``stage3.phase2:mapped_ref_surface`` → ``stage2_rewrite`` (mapped_refs
+  look fine on their own, but the KR text doesn't yet surface them —
+  the fix lives in the rewrite pass, not in cultural mapping).
 - Otherwise → ``none`` with a diagnostic summary.
 """
 
@@ -55,7 +58,6 @@ def derive(row: Stage3Output) -> list[RetryAction]:
         or _has(row.reject_reasons, "stage3.phase2", "mapped_ref_terms_in_source")
         or _has(row.reject_reasons, "stage3.phase2", "mapped_ref_ko_hangul")
         or _has(row.reject_reasons, "stage3.phase2", "mapped_ref_type_consistency")
-        or _has(row.reject_reasons, "stage3.phase2", "mapped_ref_surface")
         or _has(row.reject_reasons, "stage3.phase4", "en_ko_mapping_cosine")
         or (q.cultural_appropriateness or 5) < 3
     )
@@ -88,6 +90,7 @@ def derive(row: Stage3Output) -> list[RetryAction]:
         _has(row.reject_reasons, "stage3.phase2", "turn_index_order")
         or _has(row.reject_reasons, "stage3.phase2", "ascii_ratio")
         or _has(row.reject_reasons, "stage3.phase2", "speaker_ref_integrity")
+        or _has(row.reject_reasons, "stage3.phase2", "mapped_ref_surface")
         or _has(row.reject_reasons, "stage3.phase4", "intra_kr_coherence")
         or (q.register_consistency or 5) < 3
         or (q.persona_style_consistency or 5) < 3

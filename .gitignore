@@ -32,3 +32,6 @@ logs/
 
 .claude
 CLAUDE.md
+data/
+prev_data/
+.artifacts/

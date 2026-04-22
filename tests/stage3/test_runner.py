@@ -1,19 +1,24 @@
-"""Stage 3 runner smoke test.
-
-Currently ``runner.run`` is a scaffold stub — the test is a placeholder
-that will flesh out once the runner is re-implemented. Keeping it in place
-ensures the import path is exercised and a future re-implementation has a
-ready test file.
-"""
+"""Stage 3 runner import smoke test."""
 
 from __future__ import annotations
 
-import pytest
+import inspect
 
 from nemos_dream.stage3_validate import runner
 
 
-def test_runner_stub_raises():
-    """Until the runner is implemented, ``run`` must raise a clear signal."""
-    with pytest.raises((NotImplementedError, TypeError)):
-        runner.run("data/stage2/sample_v3.jsonl", "data/stage3/")
+def test_runner_public_api():
+    """``runner.run_async`` is async, accepts the documented kwargs."""
+    sig = inspect.signature(runner.run_async)
+    params = set(sig.parameters)
+    assert {
+        "input_path",
+        "output_dir",
+        "embed_fn",
+        "judge_fn",
+        "reward_fn",
+        "safety_fn",
+        "pii_fn",
+        "run_self_verify",
+    } <= params
+    assert inspect.iscoroutinefunction(runner.run_async)

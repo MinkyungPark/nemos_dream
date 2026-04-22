@@ -14,9 +14,14 @@ Judge axes follow the canonical ``QualityScores`` contract (1-5):
 - ``register_consistency`` — honorific level stays consistent
 - ``persona_style_consistency`` — each speaker matches its persona
 
-Reward returns ``dict[str, float]`` with the per-attribute logprobs the
-Nemotron-4-340B-Reward model emits (``correctness``, ``coherence``; we
-drop ``helpfulness`` per README rationale).
+Reward returns ``dict[str, float]`` with two 1-5 scores: ``correctness``
+and ``coherence``. ``correctness`` here is **not** EN↔KR semantic
+equivalence — it scores fidelity to the stage-1/2 ground truth
+(``mapped_refs`` substitutions, ``overall_register``/``overall_emotion``
+intensity/``speech_acts``, and per-speaker ``persona``), because this
+pipeline is a cultural rewrite rather than a translation. Shape is kept
+as ``(correctness, coherence)`` so ``dataset_metrics.reward_distribution``
+keys don't move.
 """
 
 from __future__ import annotations
@@ -51,7 +56,32 @@ def _en_text(row: Stage3Output) -> str:
 def _refs_repr(row: Stage3Output) -> str:
     if not row.mapped_refs:
         return "(none)"
-    return ", ".join(f"{m.term}→{m.ko}({m.source})" for m in row.mapped_refs)
+    return ", ".join(
+        f"{m.term}→{m.ko} [type={m.type}, source={m.source}]" for m in row.mapped_refs
+    )
+
+
+def _persona_repr(row: Stage3Output) -> str:
+    # v4 — PersonaEntry list
+    if row.persona:
+        parts = []
+        for p in row.persona:
+            rp = p.retrieved_persona
+            summary = (rp.summary_text or rp.persona or "").strip().replace("\n", " ")
+            if len(summary) > 120:
+                summary = summary[:117] + "..."
+            parts.append(
+                f"{p.speaker_name_en}→{rp.name} "
+                f"(age={rp.age}, occ={rp.occupation or '-'}): {summary or '-'}"
+            )
+        return " | ".join(parts)
+    # v3 fallback — Persona list on speaker_personas
+    if row.speaker_personas:
+        return " | ".join(
+            f"{p.speaker_ref} [register={p.formality}, emotion={p.emotion.type}]"
+            for p in row.speaker_personas
+        )
+    return "(none)"
 
 
 def _judge_kwargs(row: Stage3Output) -> dict[str, Any]:
@@ -64,11 +94,22 @@ def _judge_kwargs(row: Stage3Output) -> dict[str, Any]:
         "intensity": meta.overall_emotion.intensity,
         "speech_acts": list(meta.speech_acts),
         "refs": _refs_repr(row),
+        "persona": _persona_repr(row),
     }
 
 
 def _reward_kwargs(row: Stage3Output) -> dict[str, Any]:
-    return {"en": _en_text(row), "ko": _kr_text(row)}
+    meta = row.dialogue_decomposed
+    return {
+        "en": _en_text(row),
+        "ko": _kr_text(row),
+        "register": meta.overall_register,
+        "emotion": meta.overall_emotion.type,
+        "intensity": meta.overall_emotion.intensity,
+        "speech_acts": list(meta.speech_acts),
+        "refs": _refs_repr(row),
+        "persona": _persona_repr(row),
+    }
 
 
 def _aggregate(scores: dict[str, Any], weights: dict[str, float]) -> float:

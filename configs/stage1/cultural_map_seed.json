@@ -127,7 +127,7 @@
   "christianity": {
     "ko": "기독교",
     "type": "other",
-    "notes": "Standard Korean term for Christianity used in religious discussions.",
+    "notes": "Common Korean term for Christianity used in religious contexts.",
     "source": "retrieved",
     "reviewed": false
   },
@@ -718,9 +718,9 @@
     "reviewed": false
   },
   "father": {
-    "ko": "아빠",
+    "ko": "신부님",
     "type": "other",
-    "notes": "Child's informal address for dad",
+    "notes": "Korean honorific for a priest addressed as 'Father' in a church context.",
     "source": "retrieved",
     "reviewed": false
   },

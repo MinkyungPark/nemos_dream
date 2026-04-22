@@ -28,28 +28,43 @@ from typing import Any
 from nemos_dream.nvidia_clients import NvidiaAsyncClient, NvidiaSyncClient
 
 _JUDGE_PROMPT = """You are a senior Korean-localisation reviewer for a SODA-style dialogue dataset.
-Score the Korean rewrite below on 5 axes (integers 1-5). Return ONLY a JSON object.
+This is a **cultural rewrite**, not a translation — exact semantic equivalence with the
+English source is NOT required and MUST NOT be rewarded. Score against the stage-1/2
+metadata below as the ground truth.
 
-[English source]
+[English source — provided only as loose context, not as the target]
 {en}
 
-[Korean rewrite]
+[Korean rewrite — the artefact under review]
 {ko}
 
-[Speaker register/emotion meta]
+[Ground-truth meta produced by stage 1]
 register={register}  emotion={emotion}(intensity {intensity}/5)  speech_acts={speech_acts}
 
-[Cultural refs mapped]
+[Expected cultural substitutions (term → ko, from stage-1/2 mapped_refs — treat as the answer key)]
 {refs}
 
-Axes (1 = broken, 5 = flawless):
-- property_preservation: speech-act/register/emotion intensity preserved across the rewrite
-- naturalness: reads like natural Korean for this platform/age bracket
-- cultural_appropriateness: cultural substitutions are idiomatic (not hallucinated) in KR
-- register_consistency: honorific level stays consistent across turns
-- persona_style_consistency: each speaker's line matches the assigned KR persona
+[Assigned KR personas (from stage-2 retrieval — each speaker must sound like their persona)]
+{persona}
 
-Reply with:
+Axes (integers 1-5, where 1 = broken, 5 = flawless). Score each axis **against the
+ground-truth meta/refs/persona above**, not against the English source:
+
+- property_preservation: the rewrite honours the given register, emotion type and
+  intensity, and the listed speech_acts. If the meta says register=polite/emotion=anger
+  intensity 4, a calm casual rewrite fails even if it reads well.
+- naturalness: reads like natural Korean for the platform/age bracket implied by the
+  persona block (e.g. campus-thread casual, office-messenger polite).
+- cultural_appropriateness: every term in the expected-substitutions list appears
+  idiomatically in the KR; no hallucinated refs were introduced that aren't on the list;
+  the substitutions listed are themselves appropriate for KR (penalise an obviously wrong
+  mapping such as a US holiday mapped to an unrelated KR term).
+- register_consistency: honorific level (해요체/합쇼체/반말) stays consistent within each
+  speaker's turns AND matches that speaker's persona register.
+- persona_style_consistency: each speaker's lines match the age/occupation/summary of
+  their assigned persona — not a generic KR voice.
+
+Return ONLY a JSON object in this shape (no prose outside JSON):
 {{"property_preservation": X,
   "naturalness": X,
   "cultural_appropriateness": X,
@@ -148,6 +163,7 @@ class JudgeClient(NvidiaAsyncClient):
         intensity: int,
         speech_acts: list[str],
         refs: str,
+        persona: str,
     ) -> dict[str, Any]:
         prompt = _JUDGE_PROMPT.format(
             en=en,
@@ -157,6 +173,7 @@ class JudgeClient(NvidiaAsyncClient):
             intensity=intensity,
             speech_acts=",".join(speech_acts),
             refs=refs,
+            persona=persona,
         )
         resp = await self.openai.chat.completions.create(
             model=self.model,
@@ -167,18 +184,42 @@ class JudgeClient(NvidiaAsyncClient):
         return json.loads(resp.choices[0].message.content or "{}")
 
 
-_REWARD_PROMPT = """You are scoring an EN→KR rewrite as a reward model. Return ONLY a JSON
-object with two integer fields on a 1-5 scale.
+_REWARD_PROMPT = """You are a reward model for a Korean cultural-rewrite pipeline.
+This task is NOT translation — the Korean rewrite intentionally swaps English-culture
+references for Korean-culture ones, so surface meaning with the English source will
+diverge. Do NOT score on EN↔KR semantic equivalence. Score against the stage-1/2
+metadata below, which is the answer key.
 
-[English source]
+[English source — loose context only]
 {en}
 
-[Korean rewrite]
+[Korean rewrite under review]
 {ko}
 
-Axes (1 = terrible, 5 = excellent):
-- correctness: Does the Korean rewrite convey the same meaning as the source without losing or adding facts?
-- coherence: Does the Korean dialogue read as a single coherent exchange (turn flow, reference, tone)?
+[Ground-truth meta from stage 1]
+register={register}  emotion={emotion}(intensity {intensity}/5)  speech_acts={speech_acts}
+
+[Expected cultural substitutions (term → ko, from mapped_refs — this is the answer key)]
+{refs}
+
+[Assigned KR personas (from stage-2 retrieval)]
+{persona}
+
+Return ONLY a JSON object with two integer fields on a 1-5 scale (1 = terrible, 5 = excellent):
+
+- correctness: How well does the KR rewrite follow the ground truth? Specifically:
+  (1) every expected substitution (term → ko) is applied — and applied appropriately for
+      Korean context (penalise both missing substitutions AND nonsensical/unidiomatic
+      pairings in the list itself);
+  (2) no cultural refs are invented that aren't on the list;
+  (3) the given register, emotion type, intensity, and speech_acts are preserved;
+  (4) each speaker's lines match the voice of their assigned persona (age, occupation,
+      summary).
+  A rewrite that preserves the English facts but ignores the substitution list or
+  persona voice is WRONG for this task and must score low on correctness.
+
+- coherence: Does the Korean dialogue read as a single coherent exchange — turn flow,
+  reference resolution, tone continuity across turns — independent of the English source?
 
 Reply with:
 {{"correctness": X, "coherence": X}}
@@ -215,8 +256,28 @@ class RewardClient(NvidiaAsyncClient):
             **kwargs,
         )
 
-    async def call(self, *, en: str, ko: str) -> dict[str, float]:  # type: ignore[override]
-        prompt = _REWARD_PROMPT.format(en=en, ko=ko)
+    async def call(  # type: ignore[override]
+        self,
+        *,
+        en: str,
+        ko: str,
+        register: str,
+        emotion: str,
+        intensity: int,
+        speech_acts: list[str],
+        refs: str,
+        persona: str,
+    ) -> dict[str, float]:
+        prompt = _REWARD_PROMPT.format(
+            en=en,
+            ko=ko,
+            register=register,
+            emotion=emotion,
+            intensity=intensity,
+            speech_acts=",".join(speech_acts),
+            refs=refs,
+            persona=persona,
+        )
         resp = await self.openai.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],

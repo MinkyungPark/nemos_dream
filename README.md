@@ -35,6 +35,24 @@ Stage 2 supports three pipeline variants:
 - `direct`: no persona, no mapped_refs, direct EN→KO translation ablation
 - `naive_persona`: persona-based speaker renaming without mapped_refs ablation
 
+## Current `data/stage2/` files
+
+The checked-in `data/stage2/` folder currently contains three JSONL snapshots
+for quick side-by-side comparison of stage-2 generation variants. All three
+share the same `Stage2Output`-style structure, including fields such as
+`source_dialogue`, `persona`, `mapped_refs`, `step3_korean_dialogue`,
+`final_dialogue`, and `translation_meta`.
+
+| File | Variant intent | What it is for |
+|---|---|---|
+| `data/stage2/stage2_rewrite.jsonl` | `default` | Main rewrite artifact for the full stage-2 path. Use this when you want the standard persona-based Korean rewrite with cultural/reference mapping. |
+| `data/stage2/stage2_direct.jsonl` | `direct` | Direct-translation ablation artifact. Useful for comparing how outputs look when the rewrite layer is simplified. |
+| `data/stage2/stage2_naive_persona.jsonl` | `naive_persona` | Persona-only ablation artifact. Useful for isolating the effect of speaker/persona substitution from mapped-reference-aware rewriting. |
+
+In practice, these three files are most useful as inspection and QA artifacts:
+they let us compare tone, persona grounding, reference handling, and dialogue
+naturalness before the next validation stage.
+
 **Stage owners start here:** `.claude/docs/stage-owner-guide.md` — one-page
 playbook per stage. For deeper reference: `.claude/docs/architecture.md`
 (data flow), `.claude/docs/stage-contracts.md` (schema per boundary), and

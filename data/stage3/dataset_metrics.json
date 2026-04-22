@@ -1,0 +1,107 @@
+{
+  "counts": {
+    "accepted": 24,
+    "rejected": 23,
+    "total": 47
+  },
+  "reward_distribution": {
+    "coherence": {
+      "mean": 4.7083,
+      "p50": 5.0,
+      "p95": 5.0,
+      "n": 24
+    },
+    "correctness": {
+      "mean": 4.0,
+      "p50": 4.0,
+      "p95": 5.0,
+      "n": 24
+    }
+  },
+  "embedding_diversity": {
+    "mean_pairwise_distance": 0.6747,
+    "source": "nv_embed"
+  },
+  "distinct_n": {
+    "1": 0.3039,
+    "2": 0.7954,
+    "3": 0.9525
+  },
+  "decomposed_coverage_entropy": {
+    "overall_register": 0.6584,
+    "overall_emotion": 1.8879,
+    "speech_acts": 2.3096,
+    "scene_setting": 2.3512,
+    "relationship_type": 1.9288,
+    "speaker_age_group": 1.8232,
+    "speaker_register": 0.6584
+  },
+  "cultural_ref_diversity": {
+    "total_refs": 13,
+    "distinct_terms": 12,
+    "diversity_ratio": 0.9231,
+    "type_entropy": 2.1997
+  },
+  "mapped_ref_stats": {
+    "total_mapped": 13,
+    "distinct_ko": 12,
+    "retrieved_share": 1.0,
+    "by_source": {
+      "web+llm": 13
+    },
+    "by_type": {
+      "brand": 2,
+      "other": 3,
+      "pop_culture": 3,
+      "service": 4,
+      "slang": 1
+    }
+  },
+  "length_stats": {
+    "chars": {
+      "mean": 684.7917,
+      "p50": 603.0,
+      "p95": 1183.0,
+      "n": 24
+    },
+    "tokens": {
+      "mean": 129.2917,
+      "p50": 113.0,
+      "p95": 223.0,
+      "n": 24
+    },
+    "turns": {
+      "mean": 7.375,
+      "p50": 7.0,
+      "p95": 11.0,
+      "n": 24
+    },
+    "mapped_refs": {
+      "mean": 0.5417,
+      "p50": 0.0,
+      "p95": 1.0,
+      "n": 24
+    }
+  },
+  "reject_breakdown": {
+    "stage3.phase2:cultural_ref_coverage": 3,
+    "stage3.phase2:mapped_ref_surface": 3,
+    "stage3.phase3:safety": 3,
+    "stage3.phase4:intra_kr_coherence": 6,
+    "stage3.phase5:aggregate_floor": 7,
+    "stage3.phase5:axis_floor": 1
+  },
+  "retry_stats": {
+    "iter_histogram": {
+      "0": 47
+    },
+    "action_counts": {
+      "maps_ref_redo": 7,
+      "none": 3,
+      "stage2_rewrite": 14,
+      "websearch_cultural": 7
+    },
+    "valid_after_retry_rate": 0.0,
+    "retried_rows": 0
+  }
+}
